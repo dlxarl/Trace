@@ -292,7 +292,7 @@ const PythonPanel: React.FC<{ busy: boolean; error: string; log: LogLine[] }> = 
   <div className="max-w-[860px] px-5 pt-4 space-y-2">
     <div className="t-label">{busy ? 'Installing portable Python…' : error ? 'Python installation failed' : 'Python installed'}</div>
     {error && <Notice tone="error">{error}</Notice>}
-    <div className="max-h-[140px] overflow-y-auto rounded-[3px] border border-[var(--t-border)] bg-[#0c0c0e] px-2.5 py-2 font-mono text-[11px] leading-[1.55] select-text">
+    <div className="max-h-[140px] overflow-y-auto rounded-[3px] border border-[var(--t-border)] bg-[var(--t-code-bg)] px-2.5 py-2 font-mono text-[11px] leading-[1.55] select-text">
       {log.map((l, i) => (
         <div key={i} className={l.stream === 'stderr' ? 'text-rose-300/80' : l.stream === 'info' ? 'text-[var(--t-accent)]' : 'text-zinc-400'}>
           {l.line}
@@ -500,7 +500,7 @@ const ToolPanel: React.FC<ToolPanelProps> = ({ spec, desktop, pythonFound, state
       {(log.length > 0 || busy === 'install' || running) && (
         <div>
           <div className="t-label mb-1.5">{busy === 'install' || (!running && !result) ? 'Install log' : 'Output'}</div>
-          <div ref={logRef} className="h-[260px] overflow-y-auto rounded-[3px] border border-[var(--t-border)] bg-[#0c0c0e] px-2.5 py-2 font-mono text-[11px] leading-[1.55] select-text">
+          <div ref={logRef} className="h-[260px] overflow-y-auto rounded-[3px] border border-[var(--t-border)] bg-[var(--t-code-bg)] px-2.5 py-2 font-mono text-[11px] leading-[1.55] select-text">
             {log.map((l, i) => (
               <div key={i} className={`whitespace-pre-wrap break-all ${l.stream === 'stderr' ? 'text-zinc-500' : l.stream === 'info' ? 'text-[var(--t-accent)]' : /^\[\+\]/.test(l.line) ? 'text-emerald-300/90' : 'text-zinc-300'}`}>
                 {l.line}
@@ -553,9 +553,9 @@ const McpPanel: React.FC<{ mcp: McpStatus | null; available: boolean; onToggle: 
             aria-checked={mcp.enabled}
             onClick={onToggle}
             title={mcp.enabled ? 'Turn MCP access off' : 'Turn MCP access on'}
-            className={`mt-1 w-9 h-[20px] rounded-full p-[2px] flex transition-colors ${mcp.enabled ? 'bg-[var(--t-accent)] justify-end' : 'bg-zinc-700 justify-start'}`}
+            className={`mt-1 w-9 h-[20px] rounded-full p-[2px] flex transition-colors ${mcp.enabled ? 'bg-[var(--t-accent)] justify-end' : 'bg-zinc-600 justify-start'}`}
           >
-            <span className="w-4 h-4 rounded-full bg-white" />
+            <span className="w-4 h-4 rounded-full bg-[var(--t-on-accent)]" />
           </button>
         )}
       </div>

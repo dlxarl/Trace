@@ -99,8 +99,8 @@ export const NewRelationshipModal: React.FC<NewRelationshipModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[70] bg-black/55 flex items-center justify-center p-4">
-      <div className="bg-[var(--t-panel)] border border-[#2e2f34] rounded-[4px] max-w-lg w-full shadow-popover overflow-hidden text-[12px]">
+    <div className="fixed inset-0 z-[70] bg-[var(--t-overlay)] flex items-center justify-center p-4">
+      <div className="bg-[var(--t-panel)] border border-[var(--t-border-strong)] rounded-[4px] max-w-lg w-full shadow-popover overflow-hidden text-[12px]">
         {/* Header */}
         <div className="h-[32px] flex items-center justify-between pl-3 pr-1.5 border-b border-[var(--t-border)]">
           <div className="flex items-center space-x-2 font-semibold text-obsidian-text">

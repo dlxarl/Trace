@@ -59,8 +59,8 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
   );
 
   return (
-    <div className="fixed inset-0 z-[70] bg-black/55 flex items-start justify-center pt-24 p-4">
-      <div className="bg-[var(--t-panel)] border border-[#2e2f34] rounded-[4px] max-w-lg w-full shadow-popover overflow-hidden text-[12px] flex flex-col">
+    <div className="fixed inset-0 z-[70] bg-[var(--t-overlay)] flex items-start justify-center pt-24 p-4">
+      <div className="bg-[var(--t-panel)] border border-[var(--t-border-strong)] rounded-[4px] max-w-lg w-full shadow-popover overflow-hidden text-[12px] flex flex-col">
         {/* Search Input */}
         <div className="flex items-center px-3.5 py-3 border-b border-obsidian-border bg-[var(--t-panel)]">
           <Search className="w-4 h-4 text-obsidian-muted mr-2.5" />

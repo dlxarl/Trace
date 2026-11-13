@@ -34,6 +34,8 @@ declare global {
   interface Window {
     electronAPI?: {
       isDesktop: boolean;
+      /** Tells the desktop shell the chosen appearance (window background, title bar, native dialogs). */
+      setTheme?: (mode: 'system' | 'light' | 'dark') => Promise<'light' | 'dark'>;
       pickImport?: (mode: 'any' | 'zip' | 'folder') => Promise<
         | { ok: true; kind: 'zip'; name: string; data: Uint8Array }
         | { ok: true; kind: 'folder'; name: string; files: { path: string; text: string }[] }

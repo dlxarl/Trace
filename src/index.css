@@ -72,6 +72,26 @@
   --t-accent-bg: rgba(71, 144, 138, 0.14);
   --t-danger: #c97c7c;
   --t-warn: #c6a463;
+  --t-border-strong: #2e2f34;   /* menus, dialogs */
+  --t-border-hover: #313238;
+  --t-code-bg: #0c0c0e;         /* code blocks, consoles */
+  --t-on-accent: #ffffff;       /* text on accent / danger fills */
+  --t-overlay: rgb(0 0 0 / 0.55);
+  --t-scroll-thumb: rgba(255, 255, 255, 0.09);
+  --t-scroll-thumb-hover: rgba(255, 255, 255, 0.22);
+  --t-shadow: rgb(0 0 0 / 0.5);
+  /* verification status colours (text and line glyphs) */
+  --t-status-confirmed: #6fae8c;
+  --t-status-supported: #739cc0;
+  --t-status-unverified: #c6a463;
+  --t-status-candidate: #7c8088;
+  --t-status-rejected: #c97c7c;
+  /* syntax highlighting (code blocks) */
+  --t-syn-key: #7fb7b0;
+  --t-syn-string: #d9b98a;
+  --t-syn-number: #b5a2d4;
+  --t-syn-literal: #d98f8f;
+  --t-syn-command: #8fb5e6;
 
   /* legacy names kept for any code still reading them */
   --obsidian-bg: var(--t-bg);
@@ -88,6 +108,83 @@
   --obsidian-dim: var(--t-dim);
   color-scheme: dark;
 }
+
+/* ---------- Light theme ---------- */
+:root[data-theme='light'] {
+  --t-bg: #f6f6f7;
+  --t-panel: #ececee;
+  --t-raised: #ffffff;
+  --t-hover: #e3e3e6;
+  --t-active: #d9dadd;
+  --t-border: #d2d3d7;
+  --t-border-subtle: #e1e2e5;
+  --t-text: #2b2d31;
+  --t-text-strong: #101113;
+  --t-muted: #565960;
+  --t-dim: #7a7d84;
+  --t-accent: #2f7d77;
+  --t-accent-strong: #256a65;
+  --t-accent-bg: rgba(47, 125, 119, 0.12);
+  --t-danger: #b04f4f;
+  --t-warn: #94701f;
+  --t-border-strong: #c3c4c9;
+  --t-border-hover: #bfc0c5;
+  --t-code-bg: #f1f1f3;
+  --t-on-accent: #ffffff;
+  --t-overlay: rgb(20 20 25 / 0.35);
+  --t-scroll-thumb: rgba(0, 0, 0, 0.16);
+  --t-scroll-thumb-hover: rgba(0, 0, 0, 0.32);
+  --t-shadow: rgb(20 20 30 / 0.18);
+  --t-status-confirmed: #2f7a58;
+  --t-status-supported: #3f6f9c;
+  --t-status-unverified: #94701f;
+  --t-status-candidate: #6a6e76;
+  --t-status-rejected: #b04f4f;
+  --t-syn-key: #1f7068;
+  --t-syn-string: #8a5a14;
+  --t-syn-number: #6b4fa8;
+  --t-syn-literal: #b0413f;
+  --t-syn-command: #2a5fa6;
+  --shadow-md: 0 2px 8px rgb(20 20 30 / 0.12);
+  --shadow-lg: 0 4px 14px rgb(20 20 30 / 0.16);
+  --shadow-xl: 0 4px 14px rgb(20 20 30 / 0.16);
+  --shadow-2xl: 0 6px 18px rgb(20 20 30 / 0.2);
+
+  /* Greys flip: "zinc-100" stays "strongest text", "zinc-900" stays "faintest surface". */
+  --color-white: #101113;
+  --color-zinc-50: #16171a; --color-zinc-100: #1e1f23; --color-zinc-200: #2b2d31;
+  --color-zinc-300: #43464c; --color-zinc-400: #565960; --color-zinc-500: #666970;
+  --color-zinc-600: #7a7d84; --color-zinc-700: #c4c6cb; --color-zinc-800: #d9dadd;
+  --color-zinc-900: #e8e8ea; --color-zinc-950: #f6f6f7;
+  --color-on-accent: #ffffff;
+
+  /* Status hues darkened so text stays readable on light surfaces; 900/950 become tints */
+  --color-emerald-300: #2c6e50; --color-emerald-400: #368260; --color-emerald-500: #3f8a66;
+  --color-emerald-900: #6fae8c; --color-emerald-950: #4f9070;
+  --color-sky-300: #35638c; --color-sky-400: #43749f; --color-sky-500: #4a7ba6;
+  --color-amber-300: #85631d; --color-amber-400: #9a752a; --color-amber-500: #a07a2c;
+  --color-amber-900: #c6a463; --color-amber-950: #b4903f;
+  --color-rose-300: #9e4a4a; --color-rose-400: #b05555; --color-rose-500: #b25a5a;
+  --color-rose-900: #d98a8a; --color-rose-950: #c96a6a;
+  /* Teal ramp (also purple / indigo / violet) mirrored: dark text shades, light fills */
+  --color-indigo-50: #1b3a38; --color-indigo-100: #234a47; --color-indigo-200: #2d5f5b;
+  --color-indigo-300: #2a6e69; --color-indigo-400: #2f7d77; --color-indigo-500: #2f7d77;
+  --color-indigo-600: #64aaa4; --color-indigo-700: #86c3bd; --color-indigo-800: #acd9d5;
+  --color-indigo-900: #d6edeb; --color-indigo-950: #e6f4f3;
+  --color-purple-50: #1b3a38; --color-purple-100: #234a47; --color-purple-200: #2d5f5b;
+  --color-purple-300: #2a6e69; --color-purple-400: #2f7d77; --color-purple-500: #2f7d77;
+  --color-purple-600: #64aaa4; --color-purple-700: #86c3bd; --color-purple-800: #acd9d5;
+  --color-purple-900: #d6edeb; --color-purple-950: #e6f4f3;
+  --color-violet-50: #1b3a38; --color-violet-100: #234a47; --color-violet-200: #2d5f5b;
+  --color-violet-300: #2a6e69; --color-violet-400: #2f7d77; --color-violet-500: #2f7d77;
+  --color-violet-600: #64aaa4; --color-violet-700: #86c3bd; --color-violet-800: #acd9d5;
+  --color-violet-900: #d6edeb; --color-violet-950: #e6f4f3;
+
+  color-scheme: light;
+}
+
+/* Tailwind utility for text on accent fills (white in both themes). */
+@theme { --color-on-accent: #ffffff; }
 
 /* ---------- Cursors: everything clickable shows a pointer ---------- */
 /* Tailwind's preflight resets buttons to the default cursor; restore it for all
@@ -155,10 +252,10 @@
     white-space: nowrap;
     transition: background-color 80ms, border-color 80ms, color 80ms;
   }
-  .t-btn:hover { background: var(--t-hover); border-color: #313238; color: var(--t-text-strong); }
+  .t-btn:hover { background: var(--t-hover); border-color: var(--t-border-hover); color: var(--t-text-strong); }
   .t-btn:disabled { opacity: 0.45; pointer-events: none; }
-  .t-btn-primary { background: var(--t-accent); border-color: var(--t-accent); color: #fff; }
-  .t-btn-primary:hover { background: var(--t-accent-strong); border-color: var(--t-accent-strong); color: #fff; }
+  .t-btn-primary { background: var(--t-accent); border-color: var(--t-accent); color: var(--t-on-accent); }
+  .t-btn-primary:hover { background: var(--t-accent-strong); border-color: var(--t-accent-strong); color: var(--t-on-accent); }
   .t-btn-danger:hover { color: var(--t-danger); border-color: rgba(201, 124, 124, 0.45); }
   /* Icon-only tool button (24x24), flat */
   .t-icon-btn {
@@ -216,9 +313,9 @@
   /* Menu / popover surface */
   .t-menu {
     background: var(--t-raised);
-    border: 1px solid #2e2f34;
+    border: 1px solid var(--t-border-strong);
     border-radius: 4px;
-    box-shadow: 0 6px 18px rgb(0 0 0 / 0.5);
+    box-shadow: 0 6px 18px var(--t-shadow);
     padding: 3px 0;
     font-size: 12px;
   }
@@ -236,7 +333,7 @@
   }
   .t-menu-item.justify-between, .t-menu-item:has(> div + span) { justify-content: space-between; }
   .t-menu-item > * { margin-left: 0 !important; margin-right: 0 !important; margin-inline: 0 !important; }
-  .t-menu-item:hover { background: var(--t-accent); color: #fff; }
+  .t-menu-item:hover { background: var(--t-accent); color: var(--t-on-accent); }
   .t-menu-item svg { width: 13px !important; height: 13px !important; opacity: 0.75; color: inherit !important; fill: none !important; flex-shrink: 0; }
   .t-menu-item > .space-x-2, .t-menu-item > div { display: flex; align-items: center; gap: 8px; }
   .t-menu-item > div > * { margin-left: 0 !important; margin-right: 0 !important; margin-inline: 0 !important; }
@@ -296,19 +393,19 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.09);
+  background: var(--t-scroll-thumb);
   border-radius: 0;
   border: 2px solid transparent;
   background-clip: padding-box;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.22);
+  background: var(--t-scroll-thumb-hover);
 }
 
 /* Markdown prose styling */
 .markdown-body {
-  color: #d4d4d8;
+  color: var(--t-text);
   font-size: 13px;
   line-height: 1.6;
 }
@@ -316,17 +413,17 @@ body {
 .markdown-body h1 {
   font-size: 1.25rem;
   font-weight: 600;
-  color: #f4f4f5;
+  color: var(--t-text-strong);
   margin-top: 1rem;
   margin-bottom: 0.5rem;
-  border-bottom: 1px solid #27272a;
+  border-bottom: 1px solid var(--t-border);
   padding-bottom: 0.25rem;
 }
 
 .markdown-body h2 {
   font-size: 1.1rem;
   font-weight: 600;
-  color: #f4f4f5;
+  color: var(--t-text-strong);
   margin-top: 1rem;
   margin-bottom: 0.4rem;
 }
@@ -334,7 +431,7 @@ body {
 .markdown-body h3 {
   font-size: 1.05rem;
   font-weight: 600;
-  color: #e4e4e7;
+  color: var(--t-text);
   margin-top: 0.8rem;
   margin-bottom: 0.3rem;
 }
@@ -360,14 +457,14 @@ body {
 .markdown-body blockquote {
   border-left: 2px solid var(--t-border);
   padding-left: 0.75rem;
-  color: #a1a1aa;
+  color: var(--t-muted);
   margin-bottom: 0.75rem;
   font-style: italic;
 }
 
 .markdown-body code {
-  background: #27272a;
-  color: #c6a463;
+  background: var(--t-active);
+  color: var(--t-warn);
   padding: 0.15rem 0.35rem;
   border-radius: 0.25rem;
   font-size: 0.85em;
@@ -375,8 +472,8 @@ body {
 }
 
 .markdown-body pre {
-  background: #18181b;
-  border: 1px solid #27272a;
+  background: var(--t-raised);
+  border: 1px solid var(--t-border);
   padding: 0.75rem;
   border-radius: 0.375rem;
   overflow-x: auto;
@@ -385,13 +482,13 @@ body {
 
 .markdown-body pre code {
   background: transparent;
-  color: #e4e4e7;
+  color: var(--t-text);
   padding: 0;
 }
 
 .markdown-body hr {
   border: none;
-  border-top: 1px solid #27272a;
+  border-top: 1px solid var(--t-border);
   margin: 1.25rem 0;
 }
 

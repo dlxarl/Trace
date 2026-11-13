@@ -14,6 +14,7 @@ import { ReleaseNotes } from '@/components/common/ReleaseNotes';
 import { useReleaseNotes } from '@/services/updates/useReleaseNotes';
 import type { ProjectSummary, StorageUsage, Workspace } from '@/types';
 import { formatBytes } from '@/utils/format';
+import { useTheme, type ThemeMode } from '@/services/theme';
 import { checkForUpdates, RELEASES_PAGE_URL, type UpdateCheckResult } from '@/services/updates/updateChecker';
 
 interface SettingsModalProps {
@@ -59,6 +60,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     return localStorage.getItem('trace_settings_aura') !== 'false';
   });
   const [resetConfirm, setResetConfirm] = useState(false);
+  const { mode: themeMode, setMode: setThemeMode } = useTheme();
   const [updateState, setUpdateState] = useState<'idle' | 'checking'>('idle');
   const [updateResult, setUpdateResult] = useState<UpdateCheckResult | null>(null);
 
@@ -114,10 +116,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-[70] flex items-center justify-center p-6 bg-black/55"
+      className="fixed inset-0 z-[70] flex items-center justify-center p-6 bg-[var(--t-overlay)]"
       onMouseDown={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div className="bg-[var(--t-panel)] border border-[#2e2f34] rounded-[4px] w-full max-w-[760px] shadow-popover flex flex-col max-h-[85vh] overflow-hidden text-[12px]">
+      <div className="bg-[var(--t-panel)] border border-[var(--t-border-strong)] rounded-[4px] w-full max-w-[760px] shadow-popover flex flex-col max-h-[85vh] overflow-hidden text-[12px]">
         {/* Header */}
         <div className="h-[48px] shrink-0 flex items-center justify-between pl-5 pr-3 border-b border-[var(--t-border)]">
           <div className="min-w-0">
@@ -175,6 +177,31 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           {loadStorageUsage && (
             <StorageSection isOpen={isOpen} version={projectsVersion} load={loadStorageUsage} activeProjectId={activeProjectId} onDeleteProject={onDeleteProject} />
           )}
+
+          <Section title="Appearance">
+            <Row label="Theme" description="Follow the system setting, or always use light or dark">
+              <div role="radiogroup" aria-label="Theme" className="flex items-stretch h-[24px] border border-[var(--t-border)] rounded-[3px] overflow-hidden">
+                {([
+                  { id: 'system', label: 'System' },
+                  { id: 'light', label: 'Light' },
+                  { id: 'dark', label: 'Dark' },
+                ] as { id: ThemeMode; label: string }[]).map((t) => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={themeMode === t.id}
+                    onClick={() => setThemeMode(t.id)}
+                    className={`px-3 text-[11.5px] border-l border-[var(--t-border)] first:border-l-0 ${
+                      themeMode === t.id ? 'bg-[var(--t-active)] text-zinc-100' : 'text-zinc-500 hover:text-zinc-200 hover:bg-[var(--t-hover)]'
+                    }`}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+            </Row>
+          </Section>
 
           <Section title="Graph & Physics">
             <Row label="Interactive repulsion physics" description="Nearby nodes repel when you drag an entity">
@@ -243,7 +270,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <button
                 type="button"
                 onClick={handleClearData}
-                className={`t-btn ${resetConfirm ? '!bg-rose-500/80 !border-rose-500/80 !text-white' : '!text-rose-400 hover:!border-rose-500/50'}`}
+                className={`t-btn ${resetConfirm ? '!bg-rose-500/80 !border-rose-500/80 !text-on-accent' : '!text-rose-400 hover:!border-rose-500/50'}`}
               >
                 <Trash2 className="w-3.5 h-3.5 opacity-80" />
                 {resetConfirm ? 'Click again to confirm' : 'Reset storage'}
@@ -500,8 +527,8 @@ const Toggle: React.FC<{ on: boolean; onClick: () => void }> = ({ on, onClick })
     role="switch"
     aria-checked={on}
     onClick={onClick}
-    className={`w-8 h-[18px] rounded-full p-[2px] flex transition-colors ${on ? 'bg-[var(--t-accent)] justify-end' : 'bg-zinc-700 justify-start'}`}
+    className={`w-8 h-[18px] rounded-full p-[2px] flex transition-colors ${on ? 'bg-[var(--t-accent)] justify-end' : 'bg-zinc-600 justify-start'}`}
   >
-    <span className="w-[14px] h-[14px] rounded-full bg-white" />
+    <span className="w-[14px] h-[14px] rounded-full bg-[var(--t-on-accent)]" />
   </button>
 );

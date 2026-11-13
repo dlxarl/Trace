@@ -47,7 +47,7 @@ export const MapModal: React.FC<MapModalProps> = ({
   const osmUrl = `https://www.openstreetmap.org/search?query=${encodedQuery}`;
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/55">
+    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-[var(--t-overlay)]">
       <div
         className="w-full max-w-3xl bg-[var(--t-panel)] border border-[var(--t-border)] rounded shadow-popover overflow-hidden flex flex-col max-h-[85vh] animate-in zoom-in-95 duration-150"
         onClick={(e) => e.stopPropagation()}
@@ -130,7 +130,7 @@ export const MapModal: React.FC<MapModalProps> = ({
           </div>
           <button
             type="submit"
-            className="px-3 py-1.5 text-xs bg-purple-600 hover:bg-purple-500 text-white rounded-lg font-medium transition-colors shrink-0"
+            className="px-3 py-1.5 text-xs bg-purple-600 hover:bg-purple-500 text-on-accent rounded-lg font-medium transition-colors shrink-0"
           >
             Locate
           </button>

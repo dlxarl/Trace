@@ -88,6 +88,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // App version
   getVersion: () => ipcRenderer.invoke('app:getVersion'),
 
+  // Appearance (system / light / dark) → window background, title bar, native dialogs
+  setTheme: (mode: 'system' | 'light' | 'dark') => ipcRenderer.invoke('app:setTheme', mode),
+
   // Import investigation (native dialog)
   pickImport: (mode: 'any' | 'zip' | 'folder') => ipcRenderer.invoke('import:pick', mode),
 

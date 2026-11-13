@@ -458,7 +458,7 @@ export const EntityEditor: React.FC<EntityEditorProps> = ({
               <button
                 type="button"
                 onClick={() => openMapForLocation(draft.name)}
-                className="px-2.5 py-1 text-xs bg-rose-600 hover:bg-rose-500 text-white font-medium rounded-md transition-colors"
+                className="px-2.5 py-1 text-xs bg-rose-600 hover:bg-rose-500 text-on-accent font-medium rounded-md transition-colors"
               >
                 Open Map
               </button>

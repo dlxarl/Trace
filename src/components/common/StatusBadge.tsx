@@ -18,7 +18,7 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, size = 'md', c
   return (
     <span
       className={`inline-flex items-center gap-1.5 shrink-0 ${size === 'sm' ? 'text-[10.5px]' : 'text-[11.5px]'}`}
-      style={{ color: c.color }}
+      style={{ color: `var(--t-status-${c.status})` }}
       title={c.label}
     >
       <StatusGlyph status={status} />
@@ -32,7 +32,7 @@ export const StatusGlyph: React.FC<{ status: RelationshipStatus; width?: number 
   const dash = c.borderStyle === 'dashed' ? '3 2' : c.borderStyle === 'dotted' ? '1 2' : undefined;
   return (
     <svg width={width} height="6" viewBox={`0 0 ${width} 6`} className="shrink-0" aria-hidden>
-      <line x1="0" y1="3" x2={width} y2="3" stroke={c.color} strokeWidth="1.6" strokeDasharray={dash} strokeLinecap="round" />
+      <line x1="0" y1="3" x2={width} y2="3" stroke={`var(--t-status-${c.status})`} strokeWidth="1.6" strokeDasharray={dash} strokeLinecap="round" />
     </svg>
   );
 };

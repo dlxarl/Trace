@@ -55,6 +55,7 @@ A local [Model Context Protocol](https://modelcontextprotocol.io) server ships i
 - **Case brief**: the `project.md` working document with case statistics and the most connected entities.
 - **Full-text search**: local SQLite FTS5 (WebAssembly) over names, aliases, attributes, tags, relationships and Markdown bodies.
 - **Tabs and panels**: preview and pinned tabs, resizable panels, command palette, status bar.
+- **Light and dark themes**: **Settings → Appearance** switches between System (follows the OS, live), Light and Dark. The graph, icons, code snippets and the desktop window chrome follow the theme, and the loading screen matches it, so there is no flash of the wrong theme at startup.
 
 ### Local-first
 No accounts, no cloud sync, no telemetry. Each case is a folder of Markdown files that diff well and work with `git`:
@@ -159,6 +160,7 @@ src/
 ├── mcp/                   Read-only MCP server (stdio JSON-RPC) and tool definitions
 ├── services/
 │   ├── storage/           Electron (disk) and browser adapters
+│   ├── theme.ts           Light / dark / system appearance
 │   ├── import/            Import adapters, duplicate detection and review plan
 │   ├── updates/           SemVer comparison and GitHub Releases update checker
 │   ├── tools/             Tool catalog (Sherlock, Maigret, Holehe) and output parsers

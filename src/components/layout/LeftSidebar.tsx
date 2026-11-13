@@ -850,7 +850,7 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
                 else if (contextMenu.itemType === 'note') onDeleteNote?.(contextMenu.itemId);
                 setContextMenu(null);
               }}
-              className="t-menu-item !text-rose-400 hover:!bg-rose-500/70 hover:!text-white"
+              className="t-menu-item !text-rose-400 hover:!bg-rose-500/70 hover:!text-on-accent"
             >
               <Trash2 className="w-3.5 h-3.5" />
               <span>Delete {contextMenu.itemType}</span>
@@ -861,7 +861,7 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
 
       {/* Modal to add new Quick Source */}
       {newQuickSourceOpen && (
-        <div className="fixed inset-0 z-[70] bg-black/55 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[70] bg-[var(--t-overlay)] flex items-center justify-center p-4">
           <div className="bg-[var(--t-panel)] border border-[var(--t-border)] rounded max-w-sm w-full shadow-popover text-xs">
             <div className="t-panel-head justify-between">
               <div className="text-[12px] font-semibold text-zinc-100">

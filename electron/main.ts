@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, shell, nativeImage } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, shell, nativeImage, nativeTheme } from 'electron';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
@@ -18,6 +18,8 @@ interface AppConfig {
   workspacePath?: string;
   /** Read-only MCP server access, toggled in Tools. Off by default. */
   mcpEnabled?: boolean;
+  /** Appearance: follows the OS unless forced. */
+  theme?: 'system' | 'light' | 'dark';
 }
 
 function loadConfig(): AppConfig {
@@ -80,6 +82,12 @@ function getProjectDir(projectId: string): string {
   return projDir;
 }
 
+const CHROME = {
+  dark: { bg: '#111113', panel: '#151517', symbol: '#cbd5e1' },
+  light: { bg: '#f6f6f7', panel: '#ececee', symbol: '#2b2d31' },
+};
+const chrome = () => (nativeTheme.shouldUseDarkColors ? CHROME.dark : CHROME.light);
+
 function createWindow() {
   const iconPath = path.join(__dirname, '../build/icon.png');
   const isMac = process.platform === 'darwin';
@@ -90,12 +98,12 @@ function createWindow() {
     height: 820,
     minWidth: 1000,
     minHeight: 650,
-    backgroundColor: '#111113',
+    backgroundColor: chrome().bg,
     titleBarStyle: isMac ? 'hiddenInset' : 'hidden',
     titleBarOverlay: isWin
       ? {
-          color: '#151517',
-          symbolColor: '#cbd5e1',
+          color: chrome().panel,
+          symbolColor: chrome().symbol,
           height: 30,
         }
       : undefined,
@@ -169,6 +177,8 @@ app.whenReady().then(() => {
     }
   }
 
+  const savedTheme = loadConfig().theme;
+  nativeTheme.themeSource = savedTheme === 'light' || savedTheme === 'dark' ? savedTheme : 'system';
   toolManager = new ToolManager(path.join(app.getPath('userData'), 'tools'));
   setupIpcHandlers();
   createWindow();
@@ -622,6 +632,17 @@ function setupIpcHandlers() {
   ipcMain.handle('mcp:setEnabled', async (_, enabled: boolean) => {
     saveConfig({ mcpEnabled: enabled === true });
     return loadConfig().mcpEnabled === true;
+  });
+
+  // Appearance: persist the choice, make native dialogs match, recolour the window chrome.
+  ipcMain.handle('app:setTheme', async (_, mode: string) => {
+    const m = mode === 'light' || mode === 'dark' ? mode : 'system';
+    saveConfig({ theme: m });
+    nativeTheme.themeSource = m;
+    const c = chrome();
+    mainWindow?.setBackgroundColor(c.bg);
+    if (process.platform === 'win32') mainWindow?.setTitleBarOverlay?.({ color: c.panel, symbolColor: c.symbol, height: 30 });
+    return nativeTheme.shouldUseDarkColors ? 'dark' : 'light';
   });
 
   // Window State & Platform
