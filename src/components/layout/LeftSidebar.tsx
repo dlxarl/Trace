@@ -1,3 +1,4 @@
+import { Tooltip } from '@/components/common/Tooltip';
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   Entity,
@@ -112,29 +113,49 @@ const RailButton: React.FC<{ active?: boolean; title: string; label: string; exp
   shortcut,
   onClick,
   children,
-}) => (
-  <button
-    type="button"
-    onClick={onClick}
-    title={title}
-    aria-label={label}
-    className={`relative h-[28px] flex items-center rounded-[3px] [&>svg]:w-[15px] [&>svg]:h-[15px] [&>svg]:shrink-0 ${
-      expanded ? 'w-full px-2 gap-2.5 justify-start' : 'w-[30px] justify-center'
-    } ${
-      active
-        ? 'text-zinc-100 before:absolute before:-left-[4px] before:top-1 before:bottom-1 before:w-[2px] before:bg-[var(--t-accent)]'
-        : 'text-zinc-500 hover:text-zinc-200 hover:bg-[var(--t-hover)]'
-    }`}
-  >
-    {children}
-    {expanded && (
-      <>
-        <span className="text-[11.5px] truncate flex-1 text-left">{label}</span>
-        {shortcut && <span className="text-[10px] text-zinc-600 font-mono shrink-0">{shortcut}</span>}
-      </>
-    )}
-  </button>
-);
+}) => {
+  const description = RAIL_HELP[label] ?? (title.includes('—') ? title.split('—').slice(1).join('—').trim() : undefined);
+  return (
+    <Tooltip tip={{ title: label, shortcut, description }}>
+      <button
+        type="button"
+        onClick={onClick}
+        className={`relative h-[28px] flex items-center rounded-[3px] [&>svg]:w-[15px] [&>svg]:h-[15px] [&>svg]:shrink-0 ${
+          expanded ? 'w-full px-2 gap-2.5 justify-start' : 'w-[30px] justify-center'
+        } ${
+          active
+            ? 'text-zinc-100 before:absolute before:-left-[4px] before:top-1 before:bottom-1 before:w-[2px] before:bg-[var(--t-accent)]'
+            : 'text-zinc-500 hover:text-zinc-200 hover:bg-[var(--t-hover)]'
+        }`}
+      >
+        {children}
+        {expanded && (
+          <>
+            <span className="text-[11.5px] truncate flex-1 text-left">{label}</span>
+            {shortcut && <span className="text-[10px] text-zinc-600 font-mono shrink-0">{shortcut}</span>}
+          </>
+        )}
+      </button>
+    </Tooltip>
+  );
+};
+
+/** What each rail button does, in one line. */
+const RAIL_HELP: Record<string, string> = {
+  Graph: 'The investigation as a link graph: drag, connect and filter entities.',
+  'Case brief': 'Objective, key numbers and the working document of this case.',
+  Records: 'Every entity as a sortable table or cards, with bulk tag, merge and delete.',
+  Search: 'Search names, aliases, attributes, sources and notes.',
+  Timeline: 'Relationship periods and source dates on one time axis.',
+  Tools: 'Run OSINT tools, browse the marketplace, manage the MCP server.',
+  'Import data': 'Add results from SpiderFoot, CSV files, indicator lists or JSON, after a review.',
+  'Import case': 'Open an investigation from a .zip or folder as a new case.',
+  'Export case': 'Save this case as a .zip you can share or back up.',
+  Shortcuts: 'All keyboard shortcuts in one sheet.',
+  Settings: 'Appearance, saving, storage, network and updates.',
+  Collapse: 'Hide the labels and keep only icons.',
+  'Show labels': 'Show a name next to each icon.',
+};
 
 const RailGroup: React.FC<{ title: string; expanded: boolean }> = ({ title, expanded }) =>
   expanded ? <div className="t-label px-2 pt-2 pb-0.5 w-full">{title}</div> : <div className="w-5 h-px bg-[var(--t-border)] my-1" aria-hidden />;
