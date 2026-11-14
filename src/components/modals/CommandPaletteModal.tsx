@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ProjectData, TabType } from '@/types';
 import { EntityIcon } from '@/components/common/EntityIcon';
 import { Search, FileText, StickyNote, CornerDownLeft } from 'lucide-react';
+import { loadRecent, pickDefault, pushRecent } from '@/services/paletteRecent';
 
 export interface PaletteCommand {
   id: string;
@@ -50,6 +51,7 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({ isOpen
   const [active, setActive] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const [recent, setRecent] = useState<string[]>(() => loadRecent());
 
   useEffect(() => {
     if (isOpen) {
@@ -63,6 +65,14 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({ isOpen
   const items = useMemo<Item[]>(() => {
     if (!isOpen) return [];
     const q = query.trim();
+    if (!q) {
+      const d = pickDefault(commands, recent);
+      const out: Item[] = [
+        ...d.recent.map((c): Item => ({ kind: 'command', key: `r-${c.id}`, section: 'Recent', cmd: c })),
+        ...d.suggested.map((c): Item => ({ kind: 'command', key: `s-${c.id}`, section: 'Suggested', cmd: c })),
+      ];
+      return out;
+    }
     const cmds = commands
       .map((c) => ({ c, s: scoreMatch(q, c.title, c.section, c.keywords) }))
       .filter((x) => x.s > 0)
@@ -107,7 +117,7 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({ isOpen
       out.push(...rec.slice(0, 30));
     }
     return out;
-  }, [isOpen, query, commands, projectData, onOpenTab]);
+  }, [isOpen, query, commands, projectData, onOpenTab, recent]);
 
   useEffect(() => setActive(0), [query]);
   useEffect(() => {
@@ -120,6 +130,7 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({ isOpen
     if (!it) return;
     onClose();
     // Let the palette close first so the action's own dialog gets focus.
+    if (it.kind === 'command') setRecent(pushRecent(it.cmd.id, recent));
     setTimeout(() => (it.kind === 'command' ? it.cmd.run() : it.open()), 0);
   };
 
@@ -206,7 +217,7 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({ isOpen
             <CornerDownLeft className="w-3 h-3" /> run
           </span>
           <span className="flex-1" />
-          <span>{items.length} result{items.length === 1 ? '' : 's'}</span>
+          <span>{query.trim() ? `${items.length} result${items.length === 1 ? '' : 's'}` : `type to search all ${commands.length} commands`}</span>
         </div>
       </div>
     </div>

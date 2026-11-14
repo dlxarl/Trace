@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAutosave } from '@/hooks/useAutosave';
+import { SaveBadge } from '@/components/common/SaveBadge';
 import {
   ProjectData,
   Source,
@@ -173,11 +174,7 @@ export const SourceEditor: React.FC<SourceEditorProps> = ({
                   {admiraltyCode(draft)}
                 </span>
               )}
-              {isDirty && (
-                <span className="text-[10.5px] text-amber-400">
-                  Unsaved changes
-                </span>
-              )}
+              <SaveBadge dirty={isDirty} />
             </div>
             <h1 className="text-[13.5px] font-semibold text-zinc-50 leading-tight">{draft.title}</h1>
           </div>

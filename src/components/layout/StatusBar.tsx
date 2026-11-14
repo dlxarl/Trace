@@ -1,4 +1,6 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import { describeSave, useSaveStatus } from '@/services/saveStatus';
+import { usePreferences } from '@/services/preferences';
 import { ProjectData } from '@/types';
 import { getEntityTypeColor, getEntityTypeLabel } from '@/components/common/EntityIcon';
 
@@ -20,6 +22,16 @@ export const StatusBar: React.FC<StatusBarProps> = ({
   isLoading,
   message,
 }) => {
+  const saveSnap = useSaveStatus();
+  const { autosave } = usePreferences();
+  const [, tick] = useState(0);
+  // "Saved" fades to a time stamp after 5 s.
+  useEffect(() => {
+    if (!saveSnap.lastSavedAt || Date.now() - saveSnap.lastSavedAt >= 5000) return;
+    const t = setTimeout(() => tick((n) => n + 1), 5100 - (Date.now() - saveSnap.lastSavedAt));
+    return () => clearTimeout(t);
+  }, [saveSnap.lastSavedAt]);
+  const save = describeSave(saveSnap, autosave);
   const entity = selectedEntityId ? projectData?.entities.find((e) => e.id === selectedEntityId) : undefined;
   const rel = selectedRelationshipId ? projectData?.relationships.find((r) => r.id === selectedRelationshipId) : undefined;
   const unverified = projectData?.relationships.filter((r) => r.status === 'unverified' || r.status === 'candidate').length ?? 0;
@@ -53,7 +65,12 @@ export const StatusBar: React.FC<StatusBarProps> = ({
           <span>{rel.status}</span>
         </Cell>
       )}
-      <Cell title="Storage backend">{isDesktop ? 'disk' : 'browser storage'}</Cell>
+      <Cell title={autosave ? 'Autosave is on (Settings → General)' : 'Autosave is off: use the Save button'}>
+        <span className={`font-sans ${save.tone === 'dirty' ? 'text-amber-400' : save.tone === 'saved' ? 'text-emerald-400' : 'text-zinc-500'}`} role="status" aria-live="polite">
+          {save.text}
+        </span>
+      </Cell>
+      <Cell title="Where cases are stored">{isDesktop ? 'on this computer' : 'browser storage'}</Cell>
       <Cell>v{__APP_VERSION__}</Cell>
     </footer>
   );

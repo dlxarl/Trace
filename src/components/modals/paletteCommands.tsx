@@ -29,6 +29,7 @@ import {
   Save,
   ArrowUpFromLine,
   Briefcase,
+  HelpCircle,
   Lock,
 } from 'lucide-react';
 import type { PaletteCommand } from './CommandPaletteModal';
@@ -61,6 +62,7 @@ export interface PaletteContext {
   revealFolder: () => void;
   settings: () => void;
   shortcuts: () => void;
+  tour: () => void;
   toggleLeft: () => void;
   toggleRight: () => void;
   setTheme: (m: 'system' | 'light' | 'dark') => void;
@@ -100,6 +102,7 @@ export function buildPaletteCommands(c: PaletteContext): PaletteCommand[] {
 
   add({ id: 'settings', section: 'App', title: 'Settings', keywords: 'preferences storage updates changelog appearance', shortcut: `${c.mod},`, icon: I(Settings), run: c.settings });
   add({ id: 'shortcuts', section: 'App', title: 'Keyboard shortcuts', keywords: 'keys help cheatsheet', shortcut: '?', icon: I(Keyboard), run: c.shortcuts });
+  add({ id: 'tour', section: 'App', title: 'Show the welcome tour', keywords: 'help intro guide onboarding start', icon: I(HelpCircle), run: c.tour });
   add({ id: 'left', section: 'App', title: 'Toggle left sidebar', keywords: 'hide show panel', shortcut: `${c.mod}[`, icon: I(PanelLeft), run: c.toggleLeft });
   add({ id: 'right', section: 'App', title: 'Toggle inspector', keywords: 'hide show panel right', shortcut: `${c.mod}]`, icon: I(PanelRight), run: c.toggleRight }, p);
   add({ id: 'theme-light', section: 'App', title: 'Theme: light', keywords: 'appearance', icon: I(Sun), run: () => c.setTheme('light') });

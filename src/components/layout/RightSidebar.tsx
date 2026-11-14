@@ -5,7 +5,16 @@ import { StatusBadge, StatusGlyph } from '@/components/common/StatusBadge';
 import { getTransformsForEntity } from '@/services/transforms/registry';
 import { ChevronRight, ExternalLink, Link2, Loader2, Play, Plus } from 'lucide-react';
 
+export interface QuickAction {
+  label: string;
+  hint?: string;
+  icon: React.ReactNode;
+  run: () => void;
+}
+
 interface RightSidebarProps {
+  /** Shown in the empty inspector as a place to start. */
+  quickActions?: QuickAction[];
   isOpen: boolean;
   projectData: ProjectData;
   selectedEntityId?: string;
@@ -99,6 +108,7 @@ const Muted: React.FC<{ children: React.ReactNode }> = ({ children }) => (
 );
 
 export const RightSidebar: React.FC<RightSidebarProps> = ({
+  quickActions,
   isOpen,
   projectData,
   selectedEntityId,
@@ -560,6 +570,17 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
         <div className="px-3 py-2.5 text-[11.5px] text-zinc-500 leading-relaxed">
           Select an entity or relationship to inspect it.
         </div>
+        {quickActions && quickActions.length > 0 && (
+          <div className="px-2 pb-2" aria-label="Ways to start">
+            <div className="t-label px-1 pb-1">Ways to add to this case</div>
+            {quickActions.map((a) => (
+              <button key={a.label} type="button" onClick={a.run} className="t-row w-full !h-[26px] !px-1.5 rounded-[3px] gap-2" title={a.hint}>
+                <span className="w-4 flex justify-center opacity-80 shrink-0">{a.icon}</span>
+                <span className="flex-1 text-left truncate">{a.label}</span>
+              </button>
+            ))}
+          </div>
+        )}
         <Section id="case-entities" title="Entities by type" count={projectData.entities.length} collapsed={collapsed} onToggle={toggleSection}>
           {counts.length === 0 && <Muted>No entities.</Muted>}
           {counts.map((c) => (

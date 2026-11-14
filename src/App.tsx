@@ -42,8 +42,10 @@ import { ReportModal } from '@/components/modals/ReportModal';
 import { MergeEntitiesModal } from '@/components/modals/MergeEntitiesModal';
 import { buildTemplateRecords, getTemplate } from '@/services/templates/caseTemplates';
 import { buildPaletteCommands } from '@/components/modals/paletteCommands';
+import { markSaved } from '@/services/saveStatus';
 import { usePreferences, setPreferences } from '@/services/preferences';
 import { setThemeMode } from '@/services/theme';
+import { WelcomeTour, tourSeen } from '@/components/modals/WelcomeTour';
 import { PassphraseModal } from '@/components/modals/PassphraseModal';
 import { ExportGraphModal } from '@/components/modals/ExportGraphModal';
 import { ExtractTextModal } from '@/components/modals/ExtractTextModal';
@@ -77,6 +79,9 @@ import {
   Check,
   Search as SearchIcon,
   Lock,
+  ScanText,
+  FileInput,
+  StickyNote,
 } from 'lucide-react';
 import saveAs from 'file-saver';
 
@@ -200,6 +205,7 @@ export function App() {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [extractOpen, setExtractOpen] = useState(false);
   const [exportGraphOpen, setExportGraphOpen] = useState(false);
+  const [tourOpen, setTourOpen] = useState(false);
   const [vaultDialog, setVaultDialog] = useState<{ mode: 'lock' | 'unlock'; id: string; name: string } | null>(null);
   const prefs = usePreferences();
   const [mergeEntityId, setMergeEntityId] = useState<string | null>(null);
@@ -904,6 +910,13 @@ export function App() {
     };
   }, [loadWorkspaceData, storage]);
 
+  // First run: a short tour, once the case has loaded.
+  useEffect(() => {
+    if (initialLoading || !projectData || tourSeen()) return;
+    const t = setTimeout(() => setTourOpen(true), 600);
+    return () => clearTimeout(t);
+  }, [initialLoading, projectData]);
+
   // Global Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -1143,6 +1156,7 @@ export function App() {
     renameTab(`tab-entity-${entity.id}`, entity.name);
     const updated = await storage.getProject(activeProjectId);
     setProjectData(updated);
+    markSaved();
     if (!opts?.auto) showToast(`Entity "${entity.name}" saved`);
   };
 
@@ -1185,6 +1199,7 @@ export function App() {
     renameTab(`tab-relationship-${rel.id}`, `Rel: ${rel.type}`);
     const updated = await storage.getProject(activeProjectId);
     setProjectData(updated);
+    markSaved();
     if (!opts?.auto) showToast(`Relationship "${rel.type}" saved`);
   };
 
@@ -1264,6 +1279,7 @@ export function App() {
     renameTab(`tab-source-${source.id}`, source.title);
     const updated = await storage.getProject(activeProjectId);
     setProjectData(updated);
+    markSaved();
     if (!opts?.auto) showToast(`Source "${source.title}" saved`);
   };
 
@@ -1296,6 +1312,7 @@ export function App() {
     renameTab(`tab-note-${note.id}`, note.title);
     const updated = await storage.getProject(activeProjectId);
     setProjectData(updated);
+    markSaved();
     if (!opts?.auto) showToast(`Note "${note.title}" saved`);
   };
 
@@ -1916,7 +1933,10 @@ export function App() {
               {activeTab.type === 'overview' && (
                 <ProjectOverview
                   projectData={projectData}
-                  onSaveProject={(p) => storage.saveProject(p)}
+                  onSaveProject={async (p) => {
+                    await storage.saveProject(p);
+                    markSaved();
+                  }}
                   onOpenGraph={() => openTab('graph', undefined, 'Interactive Graph')}
                   onCreateEntity={() => setEntityModalOpen(true)}
                   onCreateRelationship={() => setRelModalOpen(true)}
@@ -1925,6 +1945,8 @@ export function App() {
                   onImportData={() => setImportDataOpen(true)}
                   onExportReport={() => setReportOpen(true)}
                   onOpenHistory={storage.isDesktop() ? () => setHistoryOpen(true) : undefined}
+                  onExtractText={() => setExtractOpen(true)}
+                  onExportGraph={() => setExportGraphOpen(true)}
                   onLockCase={storage.isDesktop() && projectData ? () => setVaultDialog({ mode: 'lock', id: projectData.project.id, name: projectData.project.name }) : undefined}
                   onOpenEntity={(id) => {
                     const e = projectData.entities.find((ent) => ent.id === id);
@@ -2115,6 +2137,12 @@ export function App() {
       {/* Right Sidebar Context Inspector */}
       {projectData && (
         <RightSidebar
+          quickActions={[
+            { label: 'New entity…', icon: <Plus className="w-3.5 h-3.5" />, run: () => setEntityModalOpen(true) },
+            { label: 'Find entities in pasted text…', icon: <ScanText className="w-3.5 h-3.5" />, run: () => setExtractOpen(true), hint: 'Emails, domains, phones, handles from an article or chat' },
+            { label: 'Import tool output…', icon: <FileInput className="w-3.5 h-3.5" />, run: () => setImportDataOpen(true) },
+            { label: 'New note', icon: <StickyNote className="w-3.5 h-3.5" />, run: createNote },
+          ]}
           isOpen={rightSidebarOpen}
           projectData={projectData}
           selectedEntityId={selectedEntityId}
@@ -2238,6 +2266,7 @@ export function App() {
           revealFolder: () => handleOpenInExplorer(activeProjectId),
           settings: () => setSettingsModalOpen(true),
           shortcuts: () => setShortcutsModalOpen(true),
+          tour: () => setTourOpen(true),
           toggleLeft: () => setLeftSidebarOpen((v) => !v),
           toggleRight: () => setRightSidebarOpen((v) => !v),
           setTheme: setThemeMode,
@@ -2293,6 +2322,8 @@ export function App() {
           showToast(message);
         }}
       />
+
+      <WelcomeTour isOpen={tourOpen} onClose={() => setTourOpen(false)} />
 
       <PassphraseModal
         isOpen={vaultDialog !== null}

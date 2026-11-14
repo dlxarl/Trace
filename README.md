@@ -62,6 +62,7 @@ See [docs/EVIDENCE.md](docs/EVIDENCE.md).
 - **Network**: route tools, page capture and API requests through **Tor** or any SOCKS/HTTP proxy, with a connection check and a log of what the app sent. **API keys** are stored in the system keychain and used as `{{key:NAME}}` in API requests.
 
 ### Finding things and starting cases
+- **Navigation**: the left rail can show labels (button at its bottom) and is grouped into View, Tools, Data and App. Case brief keeps the main actions on the toolbar and the rest under **More**. Settings has sections (General, Files & storage, Network & keys, About). A short welcome tour runs once (⌘K → “tour” to replay), and the status bar always shows *Saving… / Saved*.
 - **⌘K** is a real command palette: it lists everything the app can do (type “backup”, “merge”, “pdf”, “lock”…), with shortcuts, arrow-key selection and the entities, sources and notes of the case.
 - **Search** has filters for entities, links, sources and notes, entity type and link status, and **saved searches** per case.
 - **Graph → Filter → As of date** shows the graph as it was on a date; links without dates stay visible.

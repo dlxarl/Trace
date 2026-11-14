@@ -1934,6 +1934,7 @@ export const GraphView: React.FC<GraphViewProps> = ({
           ))}
         </div>
         )}
+        <div className="w-px h-4 bg-[var(--t-border)] mx-1 shrink-0" aria-hidden />
         <button type="button" onClick={() => runLayout(layoutName)} className="t-icon-btn" title="Re-run layout  (L)">
           <RotateCcw />
         </button>
@@ -1943,6 +1944,7 @@ export const GraphView: React.FC<GraphViewProps> = ({
 
         <ToolSep />
 
+        <div className="w-px h-4 bg-[var(--t-border)] mx-1 shrink-0" aria-hidden />
         <button type="button" onClick={() => setShowEdgeLabels(!showEdgeLabels)} className="t-icon-btn" data-active={showEdgeLabels} title="Relationship labels when zoomed in">
           <Tag />
         </button>
@@ -1959,6 +1961,7 @@ export const GraphView: React.FC<GraphViewProps> = ({
           <Boxes />
         </button>
         )}
+        <div className="w-px h-4 bg-[var(--t-border)] mx-1 shrink-0" aria-hidden />
         <button
           type="button"
           onClick={toggleConnectMode}

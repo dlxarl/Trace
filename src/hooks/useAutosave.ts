@@ -1,4 +1,5 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useId, useRef } from 'react';
+import { setDirty } from '@/services/saveStatus';
 import { usePreferences } from '@/services/preferences';
 
 /**
@@ -8,6 +9,11 @@ import { usePreferences } from '@/services/preferences';
  */
 export function useAutosave(isDirty: boolean, version: unknown, save: () => void, delayMs = 1200) {
   const { autosave } = usePreferences();
+  const id = useId();
+  useEffect(() => {
+    setDirty(id, isDirty);
+    return () => setDirty(id, false);
+  }, [id, isDirty]);
   const saveRef = useRef(save);
   saveRef.current = save;
   useEffect(() => {

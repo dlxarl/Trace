@@ -3,7 +3,10 @@ import { Project, ProjectData, RELATIONSHIP_STATUSES, ENTITY_TYPES } from '@/typ
 import { getEntityTypeColor } from '@/components/common/EntityIcon';
 import { StatusGlyph } from '@/components/common/StatusBadge';
 import { MarkdownEditor } from '@/components/common/MarkdownEditor';
-import { Network, Download, RefreshCw, Plus, Save, FolderOpen, Link2, FileInput, FileText, History, Lock } from 'lucide-react';
+import { Network, Download, RefreshCw, Plus, Save, FolderOpen, Link2, FileInput, FileText, History, Lock, ScanText, Share } from 'lucide-react';
+import { ActionMenu } from '@/components/common/ActionMenu';
+import { useAutosave } from '@/hooks/useAutosave';
+import { SaveBadge } from '@/components/common/SaveBadge';
 
 interface ProjectOverviewProps {
   projectData: ProjectData;
@@ -17,6 +20,8 @@ interface ProjectOverviewProps {
   onExportReport?: () => void;
   onOpenHistory?: () => void;
   onLockCase?: () => void;
+  onExtractText?: () => void;
+  onExportGraph?: () => void;
   onOpenEntity: (entityId: string) => void;
   onOpenInExplorer?: () => void;
 }
@@ -49,6 +54,8 @@ export const ProjectOverview: React.FC<ProjectOverviewProps> = ({
   onExportReport,
   onOpenHistory,
   onLockCase,
+  onExtractText,
+  onExportGraph,
   onOpenEntity,
   onOpenInExplorer,
 }) => {
@@ -64,6 +71,8 @@ export const ProjectOverview: React.FC<ProjectOverviewProps> = ({
     onSaveProject(draft);
     setIsDirty(false);
   };
+
+  useAutosave(isDirty, draft, handleSave);
 
   const total = projectData.entities.length;
   const relTotal = projectData.relationships.length;
@@ -107,6 +116,7 @@ export const ProjectOverview: React.FC<ProjectOverviewProps> = ({
       <div className="h-[32px] shrink-0 flex items-center gap-1 px-2 border-b border-[var(--t-border)] bg-[var(--t-panel)]">
         <span className="t-label mr-1">Case brief</span>
         <span className="font-mono text-[10.5px] text-zinc-600 truncate">{draft.id}</span>
+        <SaveBadge dirty={isDirty} />
         <div className="flex-1" />
         <button type="button" onClick={onOpenGraph} className="t-btn">
           <Network className="w-3 h-3" />
@@ -120,12 +130,6 @@ export const ProjectOverview: React.FC<ProjectOverviewProps> = ({
           <Link2 className="w-3 h-3" />
           Relationship
         </button>
-        {onImportData && (
-          <button type="button" onClick={onImportData} className="t-btn" title="Import output from external OSINT tools">
-            <FileInput className="w-3 h-3" />
-            Import data
-          </button>
-        )}
         {onExportReport && (
           <button type="button" onClick={onExportReport} className="t-btn" title="Export the case as a report (Markdown, HTML, PDF)">
             <FileText className="w-3 h-3" />
@@ -138,24 +142,34 @@ export const ProjectOverview: React.FC<ProjectOverviewProps> = ({
             History
           </button>
         )}
-        {onLockCase && (
-          <button type="button" onClick={onLockCase} className="t-btn" title="Encrypt this case with a passphrase">
-            <Lock className="w-3 h-3" />
-            Lock
-          </button>
-        )}
-        <div className="w-px h-4 bg-[var(--t-border)] mx-1" />
-        {onOpenInExplorer && (
-          <button type="button" onClick={onOpenInExplorer} className="t-icon-btn" title="Reveal case folder">
-            <FolderOpen />
-          </button>
-        )}
-        <button type="button" onClick={onExportZip} className="t-icon-btn" title="Export case archive (.zip)">
-          <Download />
-        </button>
-        <button type="button" onClick={onRebuildIndex} className="t-icon-btn" title="Rebuild full-text index">
-          <RefreshCw />
-        </button>
+        <ActionMenu
+          label="More"
+          title="Import, export, protect"
+          groups={[
+            {
+              heading: 'Bring data in',
+              actions: [
+                ...(onImportData ? [{ label: 'Import tool output…', icon: <FileInput className="w-3.5 h-3.5" />, hint: 'CSV, JSON, lists', onSelect: onImportData }] : []),
+                ...(onExtractText ? [{ label: 'Find entities in pasted text…', icon: <ScanText className="w-3.5 h-3.5" />, onSelect: onExtractText }] : []),
+              ],
+            },
+            {
+              heading: 'Take data out',
+              actions: [
+                { label: 'Export case as .zip', icon: <Download className="w-3.5 h-3.5" />, onSelect: onExportZip },
+                ...(onExportGraph ? [{ label: 'Export graph (GraphML, STIX)…', icon: <Share className="w-3.5 h-3.5" />, onSelect: onExportGraph }] : []),
+                ...(onOpenInExplorer ? [{ label: 'Reveal case folder', icon: <FolderOpen className="w-3.5 h-3.5" />, onSelect: onOpenInExplorer }] : []),
+              ],
+            },
+            {
+              heading: 'Protect and maintain',
+              actions: [
+                ...(onLockCase ? [{ label: 'Lock and encrypt…', icon: <Lock className="w-3.5 h-3.5" />, onSelect: onLockCase }] : []),
+                { label: 'Rebuild search index', icon: <RefreshCw className="w-3.5 h-3.5" />, onSelect: onRebuildIndex },
+              ],
+            },
+          ]}
+        />
         <div className="w-px h-4 bg-[var(--t-border)] mx-1" />
         <button
           type="button"

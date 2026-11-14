@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAutosave } from '@/hooks/useAutosave';
+import { SaveBadge } from '@/components/common/SaveBadge';
 import {
   Entity,
   EntityType,
@@ -292,11 +293,7 @@ export const EntityEditor: React.FC<EntityEditorProps> = ({
           <div className="min-w-0 flex-1">
             <div className="flex items-center space-x-2">
               <span className="font-mono text-[10.5px] text-zinc-600 truncate">{draft.id}</span>
-              {isDirty && (
-                <span className="text-[10.5px] text-amber-400 shrink-0">
-                  Unsaved changes
-                </span>
-              )}
+              <SaveBadge dirty={isDirty} />
             </div>
             <h1 className="text-[13.5px] font-semibold text-zinc-50 leading-tight truncate">{draft.name}</h1>
           </div>

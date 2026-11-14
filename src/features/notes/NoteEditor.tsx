@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAutosave } from '@/hooks/useAutosave';
+import { SaveBadge } from '@/components/common/SaveBadge';
 import { Note, ProjectData } from '@/types';
 import { MarkdownEditor } from '@/components/common/MarkdownEditor';
 import { Save, Trash2, FileText, X } from 'lucide-react';
@@ -74,11 +75,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
           <div>
             <div className="flex items-center space-x-2">
               <span className="font-mono text-[10.5px] text-zinc-600">{draft.id}</span>
-              {isDirty && (
-                <span className="text-[10.5px] text-amber-400">
-                  Unsaved changes
-                </span>
-              )}
+              <SaveBadge dirty={isDirty} />
             </div>
             <h1 className="text-[13.5px] font-semibold text-zinc-50 leading-tight">{draft.title}</h1>
           </div>

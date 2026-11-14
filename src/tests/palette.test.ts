@@ -16,7 +16,7 @@ const ctx = (over: Partial<PaletteContext> = {}): PaletteContext => {
     ],
     go: fn, newEntity: fn, newRelationship: fn, newSource: fn, newNote: fn, newProject: fn, importCase: fn,
     mergeSelected: fn, importData: fn, report: fn, exportZip: fn, history: fn, rebuildIndex: fn, revealFolder: fn,
-    settings: fn, shortcuts: fn, toggleLeft: fn, toggleRight: fn, setTheme: fn, toggleAutosave: fn, switchProject: fn,
+    settings: fn, shortcuts: fn, tour: fn, toggleLeft: fn, toggleRight: fn, setTheme: fn, toggleAutosave: fn, switchProject: fn,
     ...over,
   };
 };
@@ -51,5 +51,21 @@ describe('command palette search', () => {
     expect(cmds.filter((c) => c.section === 'Switch investigation').map((c) => c.title)).toEqual(['Beta']);
     expect(cmds.find((c) => c.id === 'autosave')?.title).toBe('Turn autosave off');
     expect(buildPaletteCommands(ctx({ autosave: false })).find((c) => c.id === 'autosave')?.title).toBe('Turn autosave on');
+  });
+});
+
+import { pickDefault, pushRecent, SUGGESTED_IDS } from '../services/paletteRecent';
+describe('palette defaults', () => {
+  const cmds = [...SUGGESTED_IDS, 'lock', 'merge'].map((id) => ({ id }));
+  it('puts recent first, then suggestions without repeats, only existing commands', () => {
+    const d = pickDefault(cmds, ['lock', 'gone', 'report']);
+    expect(d.recent.map((c) => c.id)).toEqual(['lock', 'report']);
+    expect(d.suggested.map((c) => c.id)).not.toContain('report');
+    expect(d.suggested.length).toBe(SUGGESTED_IDS.length - 1);
+  });
+  it('keeps at most five distinct recents, newest first', () => {
+    let r: string[] = [];
+    for (const id of ['a', 'b', 'c', 'd', 'e', 'f', 'c']) r = pushRecent(id, r);
+    expect(r).toEqual(['c', 'f', 'e', 'd', 'b']);
   });
 });

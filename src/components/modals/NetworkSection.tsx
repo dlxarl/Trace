@@ -125,9 +125,7 @@ export const NetworkSection: React.FC<{ isOpen: boolean }> = ({ isOpen }) => {
             {msg.text}
           </div>
         )}
-        <Row label="Not covered" description="Checking for app updates is made by the app window and always goes direct." stacked={false}>
-          <span />
-        </Row>
+        <div className="px-4 py-2 text-[11px] text-zinc-600">Not covered: checking for app updates is made by the app window and always goes direct.</div>
       </Section>
 
       <Section title="API keys">

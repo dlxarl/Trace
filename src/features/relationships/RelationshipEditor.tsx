@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAutosave } from '@/hooks/useAutosave';
+import { SaveBadge } from '@/components/common/SaveBadge';
 import {
   ProjectData,
   Relationship,
@@ -123,11 +124,7 @@ export const RelationshipEditor: React.FC<RelationshipEditorProps> = ({
             <div className="flex items-center space-x-2">
               <span className="font-mono text-[10.5px] text-zinc-600">{draft.id}</span>
               <StatusBadge status={draft.status} size="sm" />
-              {isDirty && (
-                <span className="text-[10.5px] text-amber-400">
-                  Unsaved changes
-                </span>
-              )}
+              <SaveBadge dirty={isDirty} />
             </div>
             <h1 className="text-[13.5px] font-semibold text-zinc-50 leading-tight">
               Relationship: <span className="text-purple-400">{draft.type}</span>

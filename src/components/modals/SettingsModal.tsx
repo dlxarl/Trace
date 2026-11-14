@@ -9,6 +9,10 @@ import {
   Keyboard,
   Loader2,
   ExternalLink,
+  SlidersHorizontal,
+  HardDrive,
+  Network as NetworkIcon,
+  Info,
 } from 'lucide-react';
 import { ReleaseNotes } from '@/components/common/ReleaseNotes';
 import { Toggle } from '@/components/common/Toggle';
@@ -20,6 +24,14 @@ import type { ProjectSummary, StorageUsage, Workspace } from '@/types';
 import { formatBytes } from '@/utils/format';
 import { useTheme, type ThemeMode } from '@/services/theme';
 import { checkForUpdates, RELEASES_PAGE_URL, type UpdateCheckResult } from '@/services/updates/updateChecker';
+
+type SettingsTab = 'general' | 'files' | 'network' | 'about';
+const SETTINGS_TABS: { id: SettingsTab; label: string; icon: React.ComponentType<{ className?: string }>; desktopOnly?: boolean }[] = [
+  { id: 'general', label: 'General', icon: SlidersHorizontal },
+  { id: 'files', label: 'Files & storage', icon: HardDrive },
+  { id: 'network', label: 'Network & keys', icon: NetworkIcon, desktopOnly: true },
+  { id: 'about', label: 'About & updates', icon: Info },
+];
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -69,6 +81,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [resetConfirm, setResetConfirm] = useState(false);
   const { mode: themeMode, setMode: setThemeMode } = useTheme();
   const { autosave } = usePreferences();
+  const [tab, setTab] = useState<SettingsTab>('general');
   const [updateState, setUpdateState] = useState<'idle' | 'checking'>('idle');
   const [updateResult, setUpdateResult] = useState<UpdateCheckResult | null>(null);
 
@@ -132,7 +145,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         <div className="h-[48px] shrink-0 flex items-center justify-between pl-5 pr-3 border-b border-[var(--t-border)]">
           <div className="min-w-0">
             <h2 className="text-[13px] font-semibold text-zinc-100 leading-tight">Application Settings</h2>
-            <p className="text-[11px] text-zinc-500 leading-tight mt-0.5">Storage, graph and keyboard preferences</p>
+            <p className="text-[11px] text-zinc-500 leading-tight mt-0.5">Appearance, saving, files, network and updates</p>
           </div>
           <button type="button" onClick={onClose} className="t-icon-btn" title="Close  (Esc)">
             <X />
@@ -140,7 +153,24 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         </div>
 
         {/* Body */}
-        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
+        <div className="flex-1 min-h-0 flex">
+        <nav aria-label="Settings sections" className="w-[168px] shrink-0 border-r border-[var(--t-border)] py-2 overflow-y-auto">
+          {SETTINGS_TABS.filter((t) => !t.desktopOnly || isDesktop).map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              aria-current={tab === t.id ? 'page' : undefined}
+              onClick={() => setTab(t.id)}
+              className={`w-full text-left px-4 h-[30px] flex items-center gap-2 text-[12px] ${tab === t.id ? 'bg-[var(--t-active)] text-zinc-100 border-l-2 border-[var(--t-accent)] pl-[14px]' : 'text-zinc-400 hover:text-zinc-100 hover:bg-[var(--t-hover)]'}`}
+            >
+              <t.icon className="w-3.5 h-3.5 opacity-70" />
+              {t.label}
+            </button>
+          ))}
+        </nav>
+        <div className="flex-1 min-w-0 overflow-y-auto px-5 py-4 space-y-5">
+{tab === 'files' && (
+<>
           <Section title="Workspace & File System">
             <Row
               label={isDesktop ? 'Working directory' : 'Browser offline storage'}
@@ -185,7 +215,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           {loadStorageUsage && (
             <StorageSection isOpen={isOpen} version={projectsVersion} load={loadStorageUsage} activeProjectId={activeProjectId} onDeleteProject={onDeleteProject} />
           )}
+</>
+)}
 
+{tab === 'general' && (
+<>
           <Section title="Appearance">
             <Row label="Theme" description="Follow the system setting, or always use light or dark">
               <div role="radiogroup" aria-label="Theme" className="flex items-stretch h-[24px] border border-[var(--t-border)] rounded-[3px] overflow-hidden">
@@ -223,9 +257,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </Row>
             )}
           </Section>
+</>
+)}
 
-          {isDesktop && <NetworkSection isOpen={isOpen} />}
+{tab === 'network' && isDesktop && <NetworkSection isOpen={isOpen} />}
 
+{tab === 'general' && (
+<>
           <Section title="Graph & Physics">
             <Row label="Interactive repulsion physics" description="Nearby nodes repel when you drag an entity">
               <Toggle on={physicsBounce} onClick={handlePhysicsToggle} />
@@ -272,6 +310,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </Row>
           </Section>
 
+</>
+)}
+
+{tab === 'about' && (
+<>
           <Section title="About & Updates">
             <Row label="Trace" description={`Installed version ${__APP_VERSION__}`}>
               <button type="button" onClick={handleCheckForUpdates} className="t-btn" disabled={updateState === 'checking'}>
@@ -300,6 +343,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </button>
             </Row>
           </Section>
+</>
+)}
+        </div>
         </div>
 
         {/* Footer */}
