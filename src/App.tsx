@@ -53,6 +53,9 @@ import { HistoryModal } from '@/components/modals/HistoryModal';
 import { applyMerge, planMerge } from '@/services/merge/mergeEntities';
 import { LAST_SEEN_KEY, cacheNotes, fetchReleaseNotes, whatsNewDecision, type ReleaseInfo } from '@/services/updates/updateChecker';
 import { ToolsView } from '@/features/tools/ToolsView';
+import { Scratchpad, SCRATCH_ID } from '@/components/common/Scratchpad';
+import { extractIndicators } from '@/services/extract/extractIndicators';
+import { RecordsView } from '@/features/records/RecordsView';
 import { TimelineView } from '@/features/timeline/TimelineView';
 import {
   fileListToBundleFiles,
@@ -209,6 +212,7 @@ export function App() {
   const [vaultDialog, setVaultDialog] = useState<{ mode: 'lock' | 'unlock'; id: string; name: string } | null>(null);
   const prefs = usePreferences();
   const [mergeEntityId, setMergeEntityId] = useState<string | null>(null);
+  const [mergePreselect, setMergePreselect] = useState<string[]>([]);
 
   // After the app was updated to a new version, show its release notes once.
   useEffect(() => {
@@ -1192,6 +1196,39 @@ export function App() {
     });
   };
 
+  /** Deleting several entities at once (Records view). One confirmation, one safety snapshot. */
+  const handleDeleteEntities = (ids: string[]) => {
+    if (!activeProjectId || !projectData) return;
+    if (ids.length === 1) return handleDeleteEntity(ids[0]);
+    const set = new Set(ids);
+    const rels = projectData.relationships.filter((r) => set.has(r.source_entity) || set.has(r.target_entity));
+    setDeleteModalState({
+      isOpen: true,
+      title: 'Delete Entities',
+      itemName: `${ids.length} entities`,
+      filePaths: [...ids.slice(0, 8).map((id) => `projects/${activeProjectId}/entities/${id}.md`), ...(ids.length > 8 ? [`… and ${ids.length - 8} more entities`] : []), ...(rels.length ? [`${rels.length} connected relationship record(s)`] : [])],
+      warningMessage: rels.length > 0 ? `This also removes ${rels.length} connected relationship record(s).${storage.isDesktop() ? ' A version of the case is saved first, so it can be restored from History.' : ''}` : undefined,
+      onConfirm: async () => {
+        await window.electronAPI?.history?.snapshot(activeProjectId, `Before deleting ${ids.length} entities`).catch(() => null);
+        for (const id of ids) {
+          await storage.deleteEntity(activeProjectId, id);
+          closeTab(`tab-entity-${id}`);
+        }
+        setProjectData(await storage.getProject(activeProjectId));
+        if (selectedEntityId && set.has(selectedEntityId)) setSelectedEntityId(undefined);
+        showToast(`${ids.length} entities deleted`);
+      },
+    });
+  };
+
+  const handleSaveEntities = async (entities: Entity[]) => {
+    if (!activeProjectId) return;
+    for (const e of entities) await storage.saveEntity(activeProjectId, e);
+    setProjectData(await storage.getProject(activeProjectId));
+    markSaved();
+    showToast(`${entities.length} entit${entities.length === 1 ? 'y' : 'ies'} updated`);
+  };
+
   // Relationship Actions
   const handleSaveRelationship = async (rel: Relationship, opts?: { auto?: boolean }) => {
     if (!activeProjectId) return;
@@ -2085,6 +2122,20 @@ export function App() {
                 })()
               )}
 
+              {activeTab.type === 'records' && projectData && (
+                <RecordsView
+                  projectData={projectData}
+                  onOpenEntity={(id, name) => openTab('entity', id, name)}
+                  onCreateEntity={() => setEntityModalOpen(true)}
+                  onSaveEntities={handleSaveEntities}
+                  onDeleteEntities={handleDeleteEntities}
+                  onMerge={(id, others) => {
+                    setMergePreselect(others);
+                    setMergeEntityId(id);
+                  }}
+                />
+              )}
+
               {activeTab.type === 'timeline' && projectData && (
                 <TimelineView
                   projectData={projectData}
@@ -2178,6 +2229,34 @@ export function App() {
       )}
       </div>
 
+      {projectData && activeProjectId && (
+        <Scratchpad
+          projectId={activeProjectId}
+          notes={projectData.notes}
+          onSave={async (text) => {
+            const now = new Date().toISOString();
+            const existing = projectData.notes.find((n) => n.id === SCRATCH_ID);
+            const note: Note = existing
+              ? { ...existing, markdownBody: text, updated_at: now }
+              : { id: SCRATCH_ID, type: 'note', title: 'Scratchpad', tags: ['scratchpad'], created_at: now, updated_at: now, markdownBody: text };
+            await storage.saveNote(activeProjectId, note);
+            // Keep the loaded case in step without a full reload (the editor is mid-typing).
+            setProjectData((prev) => (prev ? { ...prev, notes: [...prev.notes.filter((n) => n.id !== SCRATCH_ID), note] } : prev));
+            markSaved();
+          }}
+          onExtract={(text) => {
+            const batch = extractIndicators(text, { fileName: 'scratchpad' });
+            if (batch.entities.length === 0) {
+              showToast('No emails, links, domains, phones or handles found in the scratchpad');
+              return;
+            }
+            setImportBatch(batch);
+            setImportDataOpen(true);
+          }}
+          onOpenAsNote={() => openTab('note', SCRATCH_ID, 'Scratchpad')}
+        />
+      )}
+
       <StatusBar
         projectData={projectData}
         selectedEntityId={selectedEntityId}
@@ -2247,7 +2326,7 @@ export function App() {
           hasSelectedEntity: !!selectedEntityId && !!projectData?.entities.some((e) => e.id === selectedEntityId),
           autosave: prefs.autosave,
           projects: projects.map((p) => ({ id: p.id, name: p.name, active: p.id === activeProjectId })),
-          go: (t) => openTab(t, undefined, { graph: 'Interactive Graph', overview: 'Project Overview', search: 'Full-Text Search', timeline: 'Timeline', tools: 'Tools' }[t]),
+          go: (t) => openTab(t, undefined, { graph: 'Interactive Graph', overview: 'Project Overview', search: 'Full-Text Search', timeline: 'Timeline', records: 'Records', tools: 'Tools' }[t]),
           newEntity: () => setEntityModalOpen(true),
           newRelationship: () => setRelModalOpen(true),
           newSource: createSource,
@@ -2282,7 +2361,11 @@ export function App() {
 
       <MergeEntitiesModal
         isOpen={mergeEntityId !== null}
-        onClose={() => setMergeEntityId(null)}
+        onClose={() => {
+          setMergeEntityId(null);
+          setMergePreselect([]);
+        }}
+        preselect={mergePreselect}
         projectData={projectData}
         entityId={mergeEntityId}
         onConfirm={async (keepId, mergeIds) => {

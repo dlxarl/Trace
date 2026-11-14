@@ -385,6 +385,7 @@ export type TabType =
   | 'search'
   | 'tools'
   | 'timeline'
+  | 'records'
   | 'settings';
 
 export interface Tab {

@@ -14,6 +14,7 @@ import {
   PinOff,
   Blocks,
   CalendarRange,
+  Table2,
 } from 'lucide-react';
 
 interface TabBarProps {
@@ -76,6 +77,8 @@ export const TabBar: React.FC<TabBarProps> = ({
         return <LayoutDashboard className="w-3.5 h-3.5 shrink-0 opacity-70" />;
       case 'search':
         return <Search className="w-3.5 h-3.5 shrink-0 opacity-70" />;
+      case 'records':
+        return <Table2 className="w-3.5 h-3.5 shrink-0 opacity-70" />;
       case 'timeline':
         return <CalendarRange className="w-3.5 h-3.5 shrink-0 opacity-70" />;
       case 'tools':

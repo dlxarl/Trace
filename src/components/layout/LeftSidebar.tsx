@@ -52,6 +52,7 @@ import {
   ArrowDownAZ,
   ArrowDownWideNarrow,
   PanelLeftClose,
+  Table2,
   PanelLeftOpen,
 } from 'lucide-react';
 import { Select } from '@/components/common/Select';
@@ -478,6 +479,9 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
         </RailButton>
         <RailButton expanded={railExpanded} label="Case brief" shortcut="⌘O" active={activeTabType === 'overview'} title="Case brief  (⌘O)" onClick={() => onOpenTab('overview', undefined, 'Project Overview')}>
           <LayoutDashboard />
+        </RailButton>
+ <RailButton expanded={railExpanded} label="Records" active={activeTabType === 'records'} title="Records — all entities as a sortable table or cards, with bulk actions" onClick={() => onOpenTab('records', undefined, 'Records')}>
+          <Table2 />
         </RailButton>
         <RailButton expanded={railExpanded} label="Search" shortcut="⌘F" active={activeTabType === 'search'} title="Full-text search  (⌘F)" onClick={() => onOpenTab('search', undefined, 'Full-Text Search')}>
           <Search />

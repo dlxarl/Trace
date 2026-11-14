@@ -10,11 +10,13 @@ interface Props {
   projectData: ProjectData | null;
   /** The entity the dialog was opened from. */
   entityId: string | null;
+  /** Entities already chosen elsewhere (e.g. selected in Records); used instead of the best guess. */
+  preselect?: string[];
   onConfirm: (keepId: string, mergeIds: string[]) => Promise<void>;
 }
 
 /** Merge duplicate entities into one: pick the others, pick which one survives, preview, confirm. */
-export const MergeEntitiesModal: React.FC<Props> = ({ isOpen, onClose, projectData, entityId, onConfirm }) => {
+export const MergeEntitiesModal: React.FC<Props> = ({ isOpen, onClose, projectData, entityId, preselect, onConfirm }) => {
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [keepId, setKeepId] = useState('');
   const [query, setQuery] = useState('');
@@ -24,7 +26,8 @@ export const MergeEntitiesModal: React.FC<Props> = ({ isOpen, onClose, projectDa
   useEffect(() => {
     if (!isOpen || !projectData || !entityId) return;
     const likely = findDuplicateCandidates(projectData, entityId).map((c) => c.entity.id);
-    setPicked(new Set(likely.slice(0, 1))); // pre-select the best guess; the user confirms
+    const chosen = (preselect ?? []).filter((id) => id !== entityId && projectData.entities.some((e) => e.id === id));
+    setPicked(new Set(chosen.length ? chosen : likely.slice(0, 1))); // the user's selection, else the best guess; the user confirms
     setKeepId(entityId);
     setQuery('');
     setError('');

@@ -61,6 +61,10 @@ See [docs/EVIDENCE.md](docs/EVIDENCE.md).
 - **Lock and encrypt a case** (desktop): protects a case at rest with a passphrase (scrypt + AES-256-GCM). There is no recovery for a lost passphrase. See [docs/SAFETY.md](docs/SAFETY.md).
 - **Network**: route tools, page capture and API requests through **Tor** or any SOCKS/HTTP proxy, with a connection check and a log of what the app sent. **API keys** are stored in the system keychain and used as `{{key:NAME}}` in API requests.
 
+### Records and the scratchpad
+- **Records** (left rail, ⌘K → “records”): every entity as a sortable table or as cards. Filter by name, alias or tag, type, and link state (no links, links without a source); columns show link count, links without a source and the best Admiralty rating behind its links. Select rows to **add or remove a tag**, **merge** (the others are pre-selected in the merge dialog) or **delete** (one confirmation; a version is saved first on the desktop).
+- **Scratchpad** (button at the bottom right): quick captures that are saved *inside the case* as the note “scratchpad”, so history, backups and encryption cover it. **Find entities** sends its text through the normal import review.
+
 ### Finding things and starting cases
 - **Navigation**: the left rail can show labels (button at its bottom) and is grouped into View, Tools, Data and App. Case brief keeps the main actions on the toolbar and the rest under **More**. Settings has sections (General, Files & storage, Network & keys, About). A short welcome tour runs once (⌘K → “tour” to replay), and the status bar always shows *Saving… / Saved*.
 - **⌘K** is a real command palette: it lists everything the app can do (type “backup”, “merge”, “pdf”, “lock”…), with shortcuts, arrow-key selection and the entities, sources and notes of the case.

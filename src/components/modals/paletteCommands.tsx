@@ -4,6 +4,7 @@ import {
   Compass,
   Search,
   CalendarRange,
+  Table2,
   Wrench,
   Plus,
   Share2,
@@ -43,7 +44,7 @@ export interface PaletteContext {
   hasSelectedEntity: boolean;
   autosave: boolean;
   projects: { id: string; name: string; active: boolean }[];
-  go: (type: 'graph' | 'overview' | 'search' | 'timeline' | 'tools') => void;
+  go: (type: 'graph' | 'overview' | 'search' | 'timeline' | 'records' | 'tools') => void;
   newEntity: () => void;
   newRelationship: () => void;
   newSource: () => void;
@@ -79,6 +80,7 @@ export function buildPaletteCommands(c: PaletteContext): PaletteCommand[] {
   add({ id: 'go-graph', section: 'Go to', title: 'Graph', keywords: 'canvas network map visual', shortcut: `${c.mod}G`, icon: I(Network), run: () => c.go('graph') }, p);
   add({ id: 'go-overview', section: 'Go to', title: 'Case brief', keywords: 'overview summary project scope', shortcut: `${c.mod}O`, icon: I(Compass), run: () => c.go('overview') }, p);
   add({ id: 'go-search', section: 'Go to', title: 'Full-text search', keywords: 'find query', shortcut: `${c.mod}F`, icon: I(Search), run: () => c.go('search') }, p);
+  add({ id: 'go-records', section: 'Go to', title: 'Records (table of all entities)', keywords: 'list table cards people bulk tag sort filter entities', icon: I(Table2), run: () => c.go('records') }, p);
   add({ id: 'go-timeline', section: 'Go to', title: 'Timeline', keywords: 'dates periods chronology', icon: I(CalendarRange), run: () => c.go('timeline') }, p);
   add({ id: 'go-tools', section: 'Go to', title: 'Tools', keywords: 'sherlock maigret marketplace osint mcp run install', icon: I(Wrench), run: () => c.go('tools') });
 
