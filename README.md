@@ -1,4 +1,6 @@
-<div align="center">
+# Trace — Local-First OSINT Investigation & Link Analysis
+
+<p align="center">
   <img src="./build/icon.png" alt="Trace Logo" width="128" height="128" />
 </p>
 
