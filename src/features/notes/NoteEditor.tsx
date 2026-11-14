@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { useAutosave } from '@/hooks/useAutosave';
 import { Note, ProjectData } from '@/types';
 import { MarkdownEditor } from '@/components/common/MarkdownEditor';
 import { Save, Trash2, FileText, X } from 'lucide-react';
@@ -6,7 +7,7 @@ import { Save, Trash2, FileText, X } from 'lucide-react';
 interface NoteEditorProps {
   note: Note;
   projectData: ProjectData;
-  onSave: (note: Note) => void;
+  onSave: (note: Note, opts?: { auto?: boolean }) => void;
   onDelete: (noteId: string) => void;
   onOpenEntity: (entityId: string) => void;
 }
@@ -22,7 +23,14 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   const [tagInput, setTagInput] = useState<string>('');
   const [isDirty, setIsDirty] = useState<boolean>(false);
 
+  const dirtyRef = useRef(false);
+  dirtyRef.current = isDirty;
+  const autoRef = useRef(false);
+  const draftIdRef = useRef(note.id);
   useEffect(() => {
+    // A save that completes while you keep typing must not overwrite the newer text.
+    if (dirtyRef.current && draftIdRef.current === note.id) return;
+    draftIdRef.current = note.id;
     setDraft({ ...note });
     setIsDirty(false);
   }, [note]);
@@ -33,9 +41,15 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   };
 
   const handleSave = () => {
-    onSave(draft);
+    onSave(draft, { auto: autoRef.current });
     setIsDirty(false);
   };
+
+  useAutosave(isDirty, draft, () => {
+    autoRef.current = true;
+    handleSave();
+    autoRef.current = false;
+  });
 
   const addTag = () => {
     if (!tagInput.trim()) return;

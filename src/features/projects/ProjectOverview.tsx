@@ -3,7 +3,7 @@ import { Project, ProjectData, RELATIONSHIP_STATUSES, ENTITY_TYPES } from '@/typ
 import { getEntityTypeColor } from '@/components/common/EntityIcon';
 import { StatusGlyph } from '@/components/common/StatusBadge';
 import { MarkdownEditor } from '@/components/common/MarkdownEditor';
-import { Network, Download, RefreshCw, Plus, Save, FolderOpen, Link2, FileInput } from 'lucide-react';
+import { Network, Download, RefreshCw, Plus, Save, FolderOpen, Link2, FileInput, FileText, History, Lock } from 'lucide-react';
 
 interface ProjectOverviewProps {
   projectData: ProjectData;
@@ -14,6 +14,9 @@ interface ProjectOverviewProps {
   onExportZip: () => void;
   onRebuildIndex: () => void;
   onImportData?: () => void;
+  onExportReport?: () => void;
+  onOpenHistory?: () => void;
+  onLockCase?: () => void;
   onOpenEntity: (entityId: string) => void;
   onOpenInExplorer?: () => void;
 }
@@ -43,6 +46,9 @@ export const ProjectOverview: React.FC<ProjectOverviewProps> = ({
   onExportZip,
   onRebuildIndex,
   onImportData,
+  onExportReport,
+  onOpenHistory,
+  onLockCase,
   onOpenEntity,
   onOpenInExplorer,
 }) => {
@@ -118,6 +124,24 @@ export const ProjectOverview: React.FC<ProjectOverviewProps> = ({
           <button type="button" onClick={onImportData} className="t-btn" title="Import output from external OSINT tools">
             <FileInput className="w-3 h-3" />
             Import data
+          </button>
+        )}
+        {onExportReport && (
+          <button type="button" onClick={onExportReport} className="t-btn" title="Export the case as a report (Markdown, HTML, PDF)">
+            <FileText className="w-3 h-3" />
+            Report
+          </button>
+        )}
+        {onOpenHistory && (
+          <button type="button" onClick={onOpenHistory} className="t-btn" title="Earlier versions of this case, backups and restore">
+            <History className="w-3 h-3" />
+            History
+          </button>
+        )}
+        {onLockCase && (
+          <button type="button" onClick={onLockCase} className="t-btn" title="Encrypt this case with a passphrase">
+            <Lock className="w-3 h-3" />
+            Lock
           </button>
         )}
         <div className="w-px h-4 bg-[var(--t-border)] mx-1" />

@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { useEscapeKey } from '@/components/common/Dialog';
 import { X, FolderPlus } from 'lucide-react';
+import { CASE_TEMPLATES, getTemplate } from '@/services/templates/caseTemplates';
 
 interface NewProjectModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onCreate: (name: string, description: string) => void;
+  onCreate: (name: string, description: string, template?: { id: string; subject: string }) => void;
 }
 
 export const NewProjectModal: React.FC<NewProjectModalProps> = ({
@@ -15,6 +16,9 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({
 }) => {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  const [templateId, setTemplateId] = useState('blank');
+  const [subject, setSubject] = useState('');
+  const template = getTemplate(templateId);
 
   useEscapeKey(isOpen, onClose);
   if (!isOpen) return null;
@@ -22,9 +26,11 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
-    onCreate(name.trim(), description.trim());
+    onCreate(name.trim(), description.trim() || template.objective, { id: templateId, subject: subject.trim() });
     setName('');
     setDescription('');
+    setTemplateId('blank');
+    setSubject('');
     onClose();
   };
 
@@ -47,6 +53,25 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({
 
         <form onSubmit={handleSubmit} className="p-4 space-y-4">
           <div>
+            <div className="block text-[11px] text-zinc-500 mb-1">Start from</div>
+            <div className="grid grid-cols-1 gap-1" role="radiogroup" aria-label="Template">
+              {CASE_TEMPLATES.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={templateId === t.id}
+                  onClick={() => setTemplateId(t.id)}
+                  className={`text-left px-2.5 py-1.5 rounded-[3px] border ${templateId === t.id ? 'border-[var(--t-accent)] bg-[var(--t-active)]' : 'border-[var(--t-border)] hover:bg-[var(--t-hover)]'}`}
+                >
+                  <span className="text-zinc-100">{t.name}</span>
+                  <span className="block text-[11px] text-zinc-500">{t.summary}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
             <label className="block text-[11px] text-zinc-500 mb-1">
               Project Name *
             </label>
@@ -61,6 +86,13 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({
             />
           </div>
 
+          {template.subject && (
+            <div>
+              <label className="block text-[11px] text-zinc-500 mb-1">{template.subject.label} (optional)</label>
+              <input type="text" value={subject} onChange={(e) => setSubject(e.target.value)} placeholder={template.subject.placeholder} className="t-input" />
+            </div>
+          )}
+
           <div>
             <label className="block text-[11px] text-zinc-500 mb-1">
               Investigation Objective & Scope
@@ -69,7 +101,7 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({
               rows={3}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Document the primary focus, target suspects, and research bounds..."
+              placeholder={template.objective || 'Document the primary focus, target suspects, and research bounds...'}
               className="t-input !h-auto py-1.5 resize-none leading-relaxed"
             />
           </div>

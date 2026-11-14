@@ -1,6 +1,7 @@
 import JSZip from 'jszip';
 import {
   Entity,
+  EvidenceCapture,
   GraphLayout,
   Note,
   Project,
@@ -84,6 +85,48 @@ declare global {
         durationMs?: number;
       }>;
       getVersion?: () => Promise<string>;
+      evidence?: {
+        capture: (projectId: string, sourceId: string, url: string) => Promise<{ ok: true; capture: EvidenceCapture; warnings: string[] } | { ok: false; error: string }>;
+        verify: (projectId: string, sourceId: string, capture: EvidenceCapture) => Promise<
+          { ok: true; files: { name: string; status: 'ok' | 'modified' | 'missing' }[] } | { ok: false; error: string }
+        >;
+        open: (projectId: string, sourceId: string, captureId: string, name?: string) => Promise<{ ok: boolean; error?: string }>;
+        exportFiles: (projectId: string) => Promise<{ ok: true; files: { path: string; data: Uint8Array }[] } | { ok: false; error: string }>;
+        importFiles: (projectId: string, files: { path: string; data: Uint8Array }[]) => Promise<{ ok: true; written: number; rejected: number } | { ok: false; error: string }>;
+      };
+      vault?: {
+        lock: (id: string, pass: string) => Promise<{ ok: true; files: number } | { ok: false; error: string }>;
+        unlock: (id: string, pass: string) => Promise<{ ok: true; files: number } | { ok: false; error: string; wrong?: boolean }>;
+      };
+      network?: {
+        getSettings: () => Promise<import('@/services/tools/proxy').NetworkSettings & { active: string | null }>;
+        setSettings: (s: import('@/services/tools/proxy').NetworkSettings) => Promise<{ ok: true; settings: import('@/services/tools/proxy').NetworkSettings & { active: string | null } } | { ok: false; error: string }>;
+        test: () => Promise<{ ok: true; ip: string; isTor: boolean; via: string } | { ok: false; error: string }>;
+        log: () => Promise<import('@/services/tools/proxy').NetLogEntry[]>;
+        clearLog: () => Promise<void>;
+      };
+      keys?: {
+        status: () => Promise<{ available: boolean; names: string[] }>;
+        set: (name: string, value: string) => Promise<{ ok: true } | { ok: false; error: string }>;
+        remove: (name: string) => Promise<boolean>;
+      };
+      history?: {
+        list: (projectId: string) => Promise<import('@/types').SnapshotInfo[]>;
+        snapshot: (projectId: string, label?: string) => Promise<import('@/types').SnapshotInfo | null>;
+        changes: (projectId: string, id: string, against: 'previous' | 'current') => Promise<import('@/types').FileChange[]>;
+        file: (projectId: string, id: string, file: string) => Promise<{ snapshot: string | null; now: string | null }>;
+        restore: (projectId: string, id: string) => Promise<{ restored: number; removed: number }>;
+      };
+      backups?: {
+        list: (projectId: string) => Promise<import('@/types').BackupInfo[]>;
+        create: (projectId: string, reason?: string) => Promise<{ info: import('@/types').BackupInfo; skipped: string[] }>;
+        remove: (projectId: string, id: string) => Promise<void>;
+        restore: (projectId: string, id: string, mode: 'copy' | 'replace') => Promise<{ id: string }>;
+        reveal: (projectId: string) => Promise<void>;
+        getSettings: () => Promise<{ enabled: boolean; intervalMin: number; keep: number }>;
+        setSettings: (s: { enabled: boolean; intervalMin: number; keep: number }) => Promise<{ enabled: boolean; intervalMin: number; keep: number }>;
+      };
+      saveReportPdf?: (html: string, fileName: string) => Promise<{ ok: boolean; path?: string; cancelled?: boolean; error?: string }>;
       tools?: {
         status: () => Promise<{
           python: { found: boolean; command?: string; version?: string; managed?: boolean };
@@ -134,6 +177,22 @@ export class ElectronStorageAdapter implements IStorageService {
 
   async saveWorkspace(workspace: Workspace): Promise<void> {
     return this.api.saveWorkspace(workspace);
+  }
+
+  async lockProject(id: string, passphrase: string): Promise<void> {
+    const r = await this.api.vault?.lock(id, passphrase);
+    if (!r) throw new Error('Encryption is not available.');
+    if (!r.ok) throw new Error(r.error);
+  }
+
+  async unlockProject(id: string, passphrase: string): Promise<{ wrong?: boolean }> {
+    const r = await this.api.vault?.unlock(id, passphrase);
+    if (!r) throw new Error('Encryption is not available.');
+    if (!r.ok) {
+      if (r.wrong) return { wrong: true };
+      throw new Error(r.error);
+    }
+    return {};
   }
 
   async listProjects(): Promise<ProjectSummary[]> {
@@ -283,6 +342,11 @@ export class ElectronStorageAdapter implements IStorageService {
     const layout = await this.getGraphLayout(projectId);
     zip.file('graph-layout.json', JSON.stringify(layout, null, 2));
 
+    // Preserved evidence (screenshots, PDFs, MHTML) travels with the case.
+    const ev = await this.api.evidence?.exportFiles(projectId);
+    if (ev && !ev.ok) throw new Error(ev.error);
+    if (ev?.ok) ev.files.forEach((f) => zip.file(f.path, f.data));
+
     return zip.generateAsync({ type: 'blob' });
   }
 
@@ -303,6 +367,11 @@ export class ElectronStorageAdapter implements IStorageService {
     for (const s of sources) await this.saveSource(project.id, s);
     for (const n of notes) await this.saveNote(project.id, n);
     if (Object.keys(bundle.layout.positions).length > 0) await this.saveGraphLayout(project.id, bundle.layout);
+    if (bundle.evidence?.length && this.api.evidence?.importFiles) {
+      const files = await Promise.all(bundle.evidence.map(async (f) => ({ path: f.path, data: await f.bytes() })));
+      const r = await this.api.evidence.importFiles(project.id, files);
+      if (r.ok) summary.evidenceRestored = r.written;
+    }
     await this.rebuildIndex(project.id);
     return summary;
   }

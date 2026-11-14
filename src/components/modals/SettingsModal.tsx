@@ -11,6 +11,10 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import { ReleaseNotes } from '@/components/common/ReleaseNotes';
+import { Toggle } from '@/components/common/Toggle';
+import { Row, Section } from '@/components/common/SettingsParts';
+import { NetworkSection } from './NetworkSection';
+import { usePreferences, setPreferences } from '@/services/preferences';
 import { useReleaseNotes } from '@/services/updates/useReleaseNotes';
 import type { ProjectSummary, StorageUsage, Workspace } from '@/types';
 import { formatBytes } from '@/utils/format';
@@ -28,6 +32,8 @@ interface SettingsModalProps {
   onExportZip: () => void;
   onRebuildIndex: () => void;
   onOpenShortcuts: () => void;
+  /** Opens History & backups for the active case. */
+  onOpenHistory?: () => void;
   /** Changes whenever cases are added or removed, so the usage numbers refresh. */
   projectsVersion?: ProjectSummary[];
   loadStorageUsage?: () => Promise<StorageUsage>;
@@ -46,6 +52,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onExportZip,
   onRebuildIndex,
   onOpenShortcuts,
+  onOpenHistory,
   projectsVersion,
   loadStorageUsage,
   onDeleteProject,
@@ -61,6 +68,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   });
   const [resetConfirm, setResetConfirm] = useState(false);
   const { mode: themeMode, setMode: setThemeMode } = useTheme();
+  const { autosave } = usePreferences();
   const [updateState, setUpdateState] = useState<'idle' | 'checking'>('idle');
   const [updateResult, setUpdateResult] = useState<UpdateCheckResult | null>(null);
 
@@ -203,6 +211,21 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </Row>
           </Section>
 
+          <Section title="Saving">
+            <Row label="Autosave" description="Save edits a moment after you stop typing. Turn off to save only with the Save button.">
+              <Toggle on={autosave} onClick={() => setPreferences({ autosave: !autosave })} />
+            </Row>
+            {isDesktop && (
+              <Row label="Versions and backups" description="Every case keeps a version history and rolling backups.">
+                <button type="button" className="t-btn" disabled={!activeProjectId} onClick={onOpenHistory} title={activeProjectId ? undefined : 'Open a case first'}>
+                  Open…
+                </button>
+              </Row>
+            )}
+          </Section>
+
+          {isDesktop && <NetworkSection isOpen={isOpen} />}
+
           <Section title="Graph & Physics">
             <Row label="Interactive repulsion physics" description="Nearby nodes repel when you drag an entity">
               <Toggle on={physicsBounce} onClick={handlePhysicsToggle} />
@@ -328,6 +351,7 @@ const StorageSection: React.FC<{
               { label: 'Installed tools', bytes: usage.toolsBytes },
               { label: 'Portable Python', bytes: usage.pythonBytes },
               { label: 'Removed, kept on disk', bytes: usage.removedBytes },
+              { label: 'Versions & backups', bytes: usage.safetyBytes ?? 0 },
             ]
           : [{ label: 'Settings & other', bytes: Math.max(0, usage.totalBytes - usage.projectsBytes) }]),
       ].filter((p) => p.bytes > 0 || p.label === 'Investigations')
@@ -484,51 +508,4 @@ const UpdateResultRow: React.FC<{ result: UpdateCheckResult }> = ({ result }) =>
   );
 };
 
-/** Settings section: label above one bordered group of rows. */
-const Section: React.FC<{ title: string; danger?: boolean; children: React.ReactNode }> = ({ title, danger, children }) => (
-  <section>
-    <h3 className={`t-label mb-2 ${danger ? '!text-rose-400/80' : '!text-zinc-500'}`}>{title}</h3>
-    <div
-      className={`rounded-[4px] border divide-y ${
-        danger ? 'border-rose-500/25 divide-rose-500/15 bg-rose-950/10' : 'border-[var(--t-border)] divide-[var(--t-border)] bg-[var(--t-raised)]/40'
-      }`}
-    >
-      {children}
-    </div>
-  </section>
-);
 
-/** One setting: label + description on the left, control right-aligned (or below when stacked). */
-const Row: React.FC<{ label: string; description?: string; stacked?: boolean; children: React.ReactNode }> = ({
-  label,
-  description,
-  stacked,
-  children,
-}) =>
-  stacked ? (
-    <div className="px-4 py-3">
-      <div className="text-[12px] font-medium text-zinc-200">{label}</div>
-      {description && <div className="text-[11px] text-zinc-500 mt-0.5 mb-2">{description}</div>}
-      {children}
-    </div>
-  ) : (
-    <div className="px-4 py-3 flex items-center gap-6 min-h-[52px]">
-      <div className="flex-1 min-w-0">
-        <div className="text-[12px] font-medium text-zinc-200">{label}</div>
-        {description && <div className="text-[11px] text-zinc-500 mt-0.5">{description}</div>}
-      </div>
-      <div className="shrink-0 flex items-center">{children}</div>
-    </div>
-  );
-
-const Toggle: React.FC<{ on: boolean; onClick: () => void }> = ({ on, onClick }) => (
-  <button
-    type="button"
-    role="switch"
-    aria-checked={on}
-    onClick={onClick}
-    className={`w-8 h-[18px] rounded-full p-[2px] flex transition-colors ${on ? 'bg-[var(--t-accent)] justify-end' : 'bg-zinc-600 justify-start'}`}
-  >
-    <span className="w-[14px] h-[14px] rounded-full bg-[var(--t-on-accent)]" />
-  </button>
-);

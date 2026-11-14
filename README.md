@@ -43,6 +43,32 @@ Run lookups against an entity from the inspector or its context menu and get new
 ### Tools marketplace
 The **Tools** button in the left rail opens a small marketplace of well-known OSINT tools that TRACE can install and run for you: **Sherlock** and **Maigret** (username search across hundreds of sites), **Holehe** and **Ignorant** (which services an email or phone number is registered on), **DNSRecon** (DNS records, name servers, mail hosts) and **dnstwist** (look-alike domains). Each tool is installed from PyPI into its own isolated Python environment inside TRACE's data folder (TRACE uses the system Python 3.9+, or downloads a checksum-verified portable Python if there is none) and can be removed again with one click. Pick an entity from the case, press **Run**, watch the live output, then **Review & add to case**: results go through the same review as file imports, linked to the entity you ran the tool on. See [docs/TOOLS.md](docs/TOOLS.md).
 
+### Preserving evidence and reporting
+- **Capture page**: save a full-page screenshot, a PDF and an MHTML archive of a source, each with a recorded SHA-256, into the case's `evidence/` folder. **Verify** re-hashes them later to show nothing was altered. Look up or request a Wayback Machine snapshot from the same place.
+- **Source ratings**: optional Admiralty code on every source (reliability A–F, credibility 1–6), shown wherever the source is cited.
+- **Report**: export the case as Markdown, HTML or PDF with findings, statuses, numbered sources, ratings and evidence hashes.
+
+See [docs/EVIDENCE.md](docs/EVIDENCE.md).
+
+### Merging duplicates and the timeline
+- **Merge…** (entity editor): combine records of the same person, company or asset. Names become aliases, relationships move to the entity you keep, duplicate relationships are folded together with all their evidence and the stronger status, `[[links]]` in notes follow, conflicting attribute values are preserved in the entity's notes, and the merge is recorded in the entity's `merged_from` frontmatter. The dialog previews exactly what will change and suggests likely duplicates.
+- **Time periods**: relationships can have *From* / *Until* dates (`YYYY`, `YYYY-MM` or `YYYY-MM-DD`; empty end = ongoing). The **Timeline** view (left rail) draws them as bars on one axis, coloured by verification status, with source dates as markers and a per-entity filter. Periods appear in reports and to MCP clients.
+
+### Saving, history, backups and encryption
+- **Autosave** (on by default; **Settings → Saving**): editors save a moment after you stop typing. Turn it off to save only with the Save button.
+- **Version history** (desktop): a version of every case is stored a few seconds after you stop editing. **History** (Case brief toolbar, or ⌘K → “history”) shows what each version changed, a line-by-line view of any file, and **Go back to this version** (the current state is saved first, so it can be undone). A merge saves a named version before it starts.
+- **Backups** (desktop): rotating automatic `.zip` backups of the whole case, evidence included, only when the case changed. Choose the interval and how many to keep, make one by hand, restore as a new case or replace the case.
+- **Lock and encrypt a case** (desktop): protects a case at rest with a passphrase (scrypt + AES-256-GCM). There is no recovery for a lost passphrase. See [docs/SAFETY.md](docs/SAFETY.md).
+- **Network**: route tools, page capture and API requests through **Tor** or any SOCKS/HTTP proxy, with a connection check and a log of what the app sent. **API keys** are stored in the system keychain and used as `{{key:NAME}}` in API requests.
+
+### Finding things and starting cases
+- **⌘K** is a real command palette: it lists everything the app can do (type “backup”, “merge”, “pdf”, “lock”…), with shortcuts, arrow-key selection and the entities, sources and notes of the case.
+- **Search** has filters for entities, links, sources and notes, entity type and link status, and **saved searches** per case.
+- **Graph → Filter → As of date** shows the graph as it was on a date; links without dates stay visible.
+- **New investigation** offers templates (person, domain, company, username) that add the subject and a working checklist.
+- **Find entities in pasted text** lists emails, links, domains, IPs, phone numbers, @handles and crypto wallets and sends them through the normal import review.
+- **Export graph** writes GraphML (Gephi, yEd, Cytoscape) or a STIX 2.1 bundle (MISP, OpenCTI).
+
 ### Importing data from other tools
 TRACE organises what collection tools find; it does not replace them. **Import data** (Case brief toolbar or the explorer rail) reads SpiderFoot CSV exports, CSV files with type/value columns, plain indicator lists and the canonical TRACE import JSON. Before anything is written you review every entity: possible duplicates of existing entities are flagged and linked to the existing record instead of overwriting it. Imported records are tagged `imported`, keep the tool's original record and timestamps in their frontmatter, and cite an import source that also stores anything that could not be mapped. Imported relationships start as *Candidate*. See [docs/IMPORT.md](docs/IMPORT.md).
 
@@ -65,7 +91,8 @@ No accounts, no cloud sync, no telemetry. Each case is a folder of Markdown file
 ├── project.md            # scope, status, briefing
 ├── entities/*.md         # one file per entity (YAML frontmatter + notes)
 ├── relationships/*.md    # direction, status, confidence, evidence
-├── sources/*.md          # evidence and provenance
+├── sources/*.md          # evidence and provenance (rating, archive link, capture hashes)
+├── evidence/<source>/<capture>/   # preserved copies: screenshot.png, page.pdf, page.mhtml, capture.json
 ├── notes/*.md            # analyst notes (GitHub Flavored Markdown)
 └── graph-layout.json     # saved node positions
 ~/Documents/trace/removed/ # cases removed from TRACE but kept on disk (never read by TRACE or MCP)
@@ -77,7 +104,7 @@ The folder can be changed in Settings, which also shows how much space TRACE's d
 
 ## Download
 
-Get the latest build from [**GitHub Releases**](https://github.com/dlxarl/Trace/releases): macOS (Apple Silicon and Intel), Windows x64 and Linux x64. The current version is `0.2.0-alpha.1`.
+Get the latest build from [**GitHub Releases**](https://github.com/dlxarl/Trace/releases): macOS (Apple Silicon and Intel), Windows x64 and Linux x64. The current version is `0.3.0-alpha.1`.
 
 **Settings → About & Updates → Check for Updates** compares your version with the newest release on GitHub (alpha pre-releases included) and shows its release notes with a link to the release page. Nothing is downloaded or installed automatically. **Settings → Changelog** shows the release notes of the installed version from its GitHub release (cached, so it also works offline), and after the app is updated to a newer version a **What's new** dialog shows those notes once. Builds without a published release (local or unreleased) simply show no changelog.
 
@@ -115,7 +142,7 @@ Output goes to `release/`.
 | `npm run package:all` | All of the above |
 | `npm run package:dir` | Unpacked macOS `.app` for quick testing |
 
-Intel artifacts are named `…-x86_64.*` (`build/renameArtifacts.cjs` renames electron-builder's `x64` after packaging), e.g. `Trace-0.2.0-alpha.1-mac-x86_64.dmg`. The MCP server is bundled automatically (`build:electron` also builds `dist-mcp/trace-mcp.mjs`).
+Intel artifacts are named `…-x86_64.*` (`build/renameArtifacts.cjs` renames electron-builder's `x64` after packaging), e.g. `Trace-0.3.0-alpha.1-mac-x86_64.dmg`. The MCP server is bundled automatically (`build:electron` also builds `dist-mcp/trace-mcp.mjs`).
 
 Every build gets a **Build ID** in the form `YYYYMMDDHHMMSS-<12-char git commit>` (UTC time of the build and the commit it was built from; `unknown` when git is unavailable). It is generated at compile time by `build/buildId.ts`, embedded as `__BUILD_ID__`, and shown in the desktop app on the loading screen and in Settings. It identifies a build; it is not a checksum of the binary. The web build does not display it.
 
@@ -127,7 +154,7 @@ The version has a single source: `version` in `package.json`. The renderer reads
 
 | Shortcut | Action |
 | :--- | :--- |
-| <kbd>Cmd/Ctrl</kbd> + <kbd>K</kbd> | Command palette |
+| <kbd>Cmd/Ctrl</kbd> + <kbd>K</kbd> | Command palette: every action, entity, source and note |
 | <kbd>Cmd/Ctrl</kbd> + <kbd>G</kbd> | Graph |
 | <kbd>Cmd/Ctrl</kbd> + <kbd>O</kbd> | Case brief |
 | <kbd>Cmd/Ctrl</kbd> + <kbd>F</kbd> | Full-text search |
@@ -144,7 +171,7 @@ The version has a single source: `version` in `package.json`. The renderer reads
 ## Project structure
 
 ```
-electron/                  Main and preload processes (filesystem, HTTP, window, tool runner, portable Python, disk usage, case import)
+electron/                  Main and preload processes (filesystem, HTTP, window, tool runner, portable Python, disk usage, case import, page capture, evidence store)
 src/
 ├── components/
 │   ├── common/            Dialog, custom Select menu, code block, release notes, status badge, entity icons, Markdown editor
@@ -153,6 +180,7 @@ src/
 ├── features/
 │   ├── graph/             Graph view, force layout, theme, palette, transform console
 │   ├── tools/             Tools view: marketplace, tool runner, MCP switch
+│   ├── timeline/          Timeline view and model
 │   ├── entities/ relationships/ sources/ notes/   Editors
 │   ├── projects/          Case brief
 │   └── search/            Full-text search
@@ -163,6 +191,9 @@ src/
 │   ├── theme.ts           Light / dark / system appearance
 │   ├── import/            Import adapters, duplicate detection and review plan
 │   ├── updates/           SemVer comparison and GitHub Releases update checker
+│   ├── evidence/          Wayback Machine lookup
+│   ├── merge/             Entity merge planning and application
+│   ├── report/            Case report model and Markdown / HTML renderers
 │   ├── tools/             Tool catalog (Sherlock, Maigret, Holehe) and output parsers
 │   ├── transforms/        Transform registry and HTTP client
 │   ├── discovery/         Relationship discovery heuristics
@@ -180,6 +211,7 @@ build/                     App icons, packaging hooks, Build ID generator
 - Data stays on your filesystem as readable Markdown.
 - No telemetry, analytics or cloud services. The app only makes network requests you trigger (transforms, the API console, installing and running tools, and Check for Updates, which calls the public GitHub Releases API).
 - Tools run only when you press Run, from catalog-defined commands (no shell, input validated, isolated Python environments, hard timeout). They contact third-party websites from your computer.
+- Cases can be locked with a passphrase, and traffic can be sent through Tor or a proxy (see [docs/SAFETY.md](docs/SAFETY.md) for exactly what is and is not covered).
 - The MCP server is off until you enable it. It reads only `projects/` inside your TRACE workspace, validates every id, refuses symlinks that point outside it and has no write operations.
 - Works fully offline for everything else.
 

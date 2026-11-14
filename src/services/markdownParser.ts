@@ -2,6 +2,11 @@ import * as yaml from 'js-yaml';
 import {
   Entity,
   EntityFrontmatterSchema,
+  parsePartialDate,
+  EvidenceCapture,
+  EvidenceFile,
+  InfoCredibility,
+  SourceReliability,
   EntityType,
   Note,
   NoteFrontmatterSchema,
@@ -141,6 +146,14 @@ export function serializeEntityFile(entity: Entity): string {
 }
 
 // Relationship Serializers & Parsers
+
+/** YAML turns a bare 2019-03-05 into a Date; keep dates as the text the user wrote. Invalid values are dropped. */
+function relDates(fm: Record<string, any>): { valid_from?: string; valid_to?: string } {
+  const text = (v: unknown) => (v instanceof Date ? v.toISOString().slice(0, 10) : typeof v === 'number' ? String(v) : v);
+  const from = text(fm.valid_from);
+  const to = text(fm.valid_to);
+  return { valid_from: parsePartialDate(from) ? (from as string) : undefined, valid_to: parsePartialDate(to) ? (to as string) : undefined };
+}
 export function parseRelationshipFile(raw: string, fallbackId: string): Relationship {
   const { frontmatter, content } = parseMarkdownFrontmatter(raw);
   const validated = RelationshipFrontmatterSchema.safeParse(frontmatter);
@@ -156,6 +169,7 @@ export function parseRelationshipFile(raw: string, fallbackId: string): Relation
       status: ((frontmatter.status as RelationshipStatus) || 'candidate'),
       confidence: typeof frontmatter.confidence === 'number' ? frontmatter.confidence : null,
       evidence: Array.isArray(frontmatter.evidence) ? frontmatter.evidence : [],
+      ...relDates(frontmatter),
       created_at: (frontmatter.created_at as string) || now,
       markdownBody: content,
       extraFrontmatter: frontmatter,
@@ -164,7 +178,7 @@ export function parseRelationshipFile(raw: string, fallbackId: string): Relation
 
   const data = validated.data;
   const extra: Record<string, any> = {};
-  const knownKeys = ['id', 'type', 'source_entity', 'target_entity', 'directed', 'status', 'confidence', 'evidence', 'created_at'];
+  const knownKeys = ['id', 'type', 'source_entity', 'target_entity', 'directed', 'status', 'confidence', 'evidence', 'valid_from', 'valid_to', 'created_at'];
   for (const [k, v] of Object.entries(frontmatter)) {
     if (!knownKeys.includes(k)) {
       extra[k] = v;
@@ -180,6 +194,7 @@ export function parseRelationshipFile(raw: string, fallbackId: string): Relation
     status: data.status,
     confidence: data.confidence ?? null,
     evidence: data.evidence || [],
+    ...relDates(frontmatter),
     created_at: data.created_at || now,
     markdownBody: content,
     extraFrontmatter: Object.keys(extra).length > 0 ? extra : undefined,
@@ -196,6 +211,8 @@ export function serializeRelationshipFile(rel: Relationship): string {
     status: rel.status,
     confidence: rel.confidence,
     evidence: rel.evidence,
+    valid_from: rel.valid_from || undefined,
+    valid_to: rel.valid_to || undefined,
     created_at: rel.created_at,
   };
 
@@ -208,10 +225,51 @@ export function serializeRelationshipFile(rel: Relationship): string {
 }
 
 // Source Serializers & Parsers
+const RELIABILITY = new Set(['A', 'B', 'C', 'D', 'E', 'F']);
+const CREDIBILITY = new Set(['1', '2', '3', '4', '5', '6']);
+const SHA256_RE = /^[0-9a-f]{64}$/;
+const CAPTURE_FILE_KINDS = new Set(['screenshot', 'pdf', 'mhtml']);
+
+/** Reads the optional rating / archive / capture fields; anything malformed is dropped, not guessed. */
+function sourceExtras(fm: Record<string, any>): Pick<Source, 'reliability' | 'credibility' | 'archive_url' | 'captures'> {
+  const rel = typeof fm.reliability === 'string' ? fm.reliability.toUpperCase() : '';
+  const cred = fm.credibility == null ? '' : String(fm.credibility);
+  const captures: EvidenceCapture[] = [];
+  if (Array.isArray(fm.captures)) {
+    for (const c of fm.captures) {
+      if (!c || typeof c !== 'object' || typeof c.id !== 'string' || !/^[0-9A-Za-z_-]{1,40}$/.test(c.id)) continue;
+      const files: EvidenceFile[] = (Array.isArray(c.files) ? c.files : [])
+        .filter((f: any) => f && typeof f.name === 'string' && /^[a-z]+\.[a-z]+$/.test(f.name) && CAPTURE_FILE_KINDS.has(f.kind) && typeof f.sha256 === 'string' && SHA256_RE.test(f.sha256))
+        .map((f: any) => ({ name: f.name, kind: f.kind, sha256: f.sha256, bytes: Number(f.bytes) || 0 }));
+      captures.push({
+        id: c.id,
+        captured_at: typeof c.captured_at === 'string' ? c.captured_at : '',
+        url: typeof c.url === 'string' ? c.url : '',
+        final_url: typeof c.final_url === 'string' ? c.final_url : undefined,
+        title: typeof c.title === 'string' ? c.title : undefined,
+        files,
+        tool: typeof c.tool === 'string' ? c.tool : undefined,
+      });
+    }
+  }
+  return {
+    reliability: RELIABILITY.has(rel) ? (rel as SourceReliability) : undefined,
+    credibility: CREDIBILITY.has(cred) ? (cred as InfoCredibility) : undefined,
+    archive_url: typeof fm.archive_url === 'string' && /^https?:\/\//i.test(fm.archive_url) ? fm.archive_url : undefined,
+    captures: captures.length ? captures : undefined,
+  };
+}
+
 export function parseSourceFile(raw: string, fallbackId: string): Source {
   const { frontmatter, content } = parseMarkdownFrontmatter(raw);
   const validated = SourceFrontmatterSchema.safeParse(frontmatter);
   const now = new Date().toISOString();
+  const knownKeys = ['id', 'type', 'title', 'url', 'accessed_at', 'source_type', 'reliability', 'credibility', 'archive_url', 'captures'];
+  const extra: Record<string, any> = {};
+  for (const [k, v] of Object.entries(frontmatter)) {
+    if (!knownKeys.includes(k)) extra[k] = v;
+  }
+  const extraFrontmatter = Object.keys(extra).length > 0 ? extra : undefined;
 
   if (!validated.success) {
     return {
@@ -221,20 +279,13 @@ export function parseSourceFile(raw: string, fallbackId: string): Source {
       url: frontmatter.url as string | undefined,
       accessed_at: (frontmatter.accessed_at as string) || now,
       source_type: ((frontmatter.source_type as SourceType) || 'webpage'),
+      ...sourceExtras(frontmatter),
       markdownBody: content,
-      extraFrontmatter: frontmatter,
+      extraFrontmatter,
     };
   }
 
   const data = validated.data;
-  const extra: Record<string, any> = {};
-  const knownKeys = ['id', 'type', 'title', 'url', 'accessed_at', 'source_type'];
-  for (const [k, v] of Object.entries(frontmatter)) {
-    if (!knownKeys.includes(k)) {
-      extra[k] = v;
-    }
-  }
-
   return {
     id: data.id,
     type: 'source',
@@ -242,8 +293,9 @@ export function parseSourceFile(raw: string, fallbackId: string): Source {
     url: data.url,
     accessed_at: data.accessed_at || now,
     source_type: (data.source_type as SourceType) || 'webpage',
+    ...sourceExtras(frontmatter),
     markdownBody: content,
-    extraFrontmatter: Object.keys(extra).length > 0 ? extra : undefined,
+    extraFrontmatter,
   };
 }
 
@@ -255,6 +307,11 @@ export function serializeSourceFile(source: Source): string {
     url: source.url,
     accessed_at: source.accessed_at,
     source_type: source.source_type,
+    reliability: source.reliability,
+    credibility: source.credibility,
+    archive_url: source.archive_url,
+    // JSON round-trip drops undefined members, which YAML cannot hold
+    captures: source.captures?.length ? JSON.parse(JSON.stringify(source.captures)) : undefined,
   };
 
   if (source.extraFrontmatter) {

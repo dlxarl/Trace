@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Entity, ENTITY_TYPES, ProjectData, RELATIONSHIP_STATUSES } from '@/types';
+import { Entity, ENTITY_TYPES, ProjectData, RELATIONSHIP_STATUSES, admiraltyCode } from '@/types';
 import { getEntityTypeColor, getEntityTypeLabel } from '@/components/common/EntityIcon';
 import { StatusBadge, StatusGlyph } from '@/components/common/StatusBadge';
 import { getTransformsForEntity } from '@/services/transforms/registry';
@@ -195,6 +195,11 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
               <div className={`truncate ${src ? '' : 'text-rose-400'}`}>{src ? src.title : `${srcId} (missing)`}</div>
               {src?.url && <div className="truncate font-mono text-[10px] text-zinc-600">{src.url}</div>}
             </div>
+            {src && admiraltyCode(src) && (
+              <span className="t-kbd !text-[9.5px] shrink-0" title="Admiralty rating">
+                {admiraltyCode(src)}
+              </span>
+            )}
             <span className="font-mono text-[10px] text-zinc-600 shrink-0 pt-px">{src?.source_type}</span>
           </div>
         );

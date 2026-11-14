@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useAutosave } from '@/hooks/useAutosave';
 import {
   Entity,
   EntityType,
@@ -16,6 +17,7 @@ import {
   X,
   ArrowRight,
   Layers,
+  GitMerge,
   MapPin,
   Upload,
   Image as ImageIcon,
@@ -27,12 +29,13 @@ import { Select } from '@/components/common/Select';
 interface EntityEditorProps {
   entity: Entity;
   projectData: ProjectData;
-  onSave: (entity: Entity) => void;
+  onSave: (entity: Entity, opts?: { auto?: boolean }) => void;
   onDelete: (entityId: string) => void;
   onOpenEntity: (entityId: string) => void;
   onOpenRelationship: (relationshipId: string) => void;
   onCreateRelationship: (sourceId: string) => void;
   onShowInGraph: (entityId: string) => void;
+  onMerge?: (entityId: string) => void;
   onDirtyChange?: (isDirty: boolean) => void;
 }
 
@@ -72,6 +75,7 @@ export const EntityEditor: React.FC<EntityEditorProps> = ({
   onOpenRelationship,
   onCreateRelationship,
   onShowInGraph,
+  onMerge,
   onDirtyChange,
 }) => {
   const [draft, setDraft] = useState<Entity>({ ...entity });
@@ -92,7 +96,14 @@ export const EntityEditor: React.FC<EntityEditorProps> = ({
   const attrInputRef = useRef<HTMLInputElement>(null);
   const photoFileInputRef = useRef<HTMLInputElement>(null);
 
+  const dirtyRef = useRef(false);
+  dirtyRef.current = isDirty;
+  const autoRef = useRef(false);
+  const draftIdRef = useRef(entity.id);
   useEffect(() => {
+    // A save that completes while you keep typing must not overwrite the newer text.
+    if (dirtyRef.current && draftIdRef.current === entity.id) return;
+    draftIdRef.current = entity.id;
     setDraft({ ...entity });
     setIsDirty(false);
     onDirtyChange?.(false);
@@ -107,10 +118,16 @@ export const EntityEditor: React.FC<EntityEditorProps> = ({
   const handleSave = () => {
     const trimmedName = draft.name.trim();
     if (!trimmedName) return;
-    onSave({ ...draft, name: trimmedName });
+    onSave({ ...draft, name: trimmedName }, { auto: autoRef.current });
     setIsDirty(false);
     onDirtyChange?.(false);
   };
+
+  useAutosave(isDirty && !!draft.name.trim(), draft, () => {
+    autoRef.current = true;
+    handleSave();
+    autoRef.current = false;
+  });
 
   // Photo handlers
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -294,6 +311,13 @@ export const EntityEditor: React.FC<EntityEditorProps> = ({
             <Layers className="w-3.5 h-3.5 opacity-70" />
             <span>Show in Graph</span>
           </button>
+
+          {onMerge && (
+            <button type="button" onClick={() => onMerge(draft.id)} className="t-btn" title="Merge duplicate entities into one">
+              <GitMerge className="w-3.5 h-3.5 opacity-70" />
+              <span>Merge…</span>
+            </button>
+          )}
 
           <button
             type="button"

@@ -62,6 +62,8 @@ Every tool is annotated `readOnlyHint: true`, `destructiveHint: false`. Results 
 | `get_evidence` | One of: sources behind a relationship, all sources behind an entity's links (plus its unsourced links), or a source's content and the links it supports |
 | `find_paths` | All shortest paths between two entities (links treated as undirected), each with its weakest evidence class |
 
+Sources returned by `get_relationship` and `get_evidence` include `rating` (Admiralty code such as `B2`, or null), `archive_url` and `preserved_copies` (number of captures with hashes).
+
 Evidence classes: `observed` (confirmed / supported), `hypothesis` (unverified / candidate), `disproven` (rejected). Rejected links are excluded from neighbourhoods and paths unless `include_rejected: true`.
 
 Bounded outputs: search ≤ 100 results, neighbours ≤ 200 entities and depth ≤ 3, paths ≤ 20 and depth ≤ 6, long Markdown bodies are truncated to 4,000 characters with a `*_truncated` flag.
@@ -87,5 +89,6 @@ The handlers never touch the filesystem directly: they get a `ProjectSource` (li
 
 ## Limitations
 
+- Locked (encrypted) cases are not readable until they are unlocked in the app. Version history and backups (`.trace/`) are never read.
 - Projects are re-read from disk on every call (always fresh, but slower on very large cases).
 - Only the desktop app's on-disk workspace is supported; the browser build's data lives in browser storage and is not reachable.

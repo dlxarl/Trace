@@ -15,6 +15,44 @@ contextBridge.exposeInMainWorld('electronAPI', {
   deleteProject: (id: string, mode?: 'delete' | 'keep' | 'trash') => ipcRenderer.invoke('projects:delete', id, mode),
   getStorageUsage: () => ipcRenderer.invoke('storage:usage'),
 
+  // Encrypted cases
+  vault: {
+    lock: (id: string, pass: string) => ipcRenderer.invoke('vault:lock', id, pass),
+    unlock: (id: string, pass: string) => ipcRenderer.invoke('vault:unlock', id, pass),
+  },
+
+  // Proxy / Tor, outbound log and API keys
+  network: {
+    getSettings: () => ipcRenderer.invoke('net:getSettings'),
+    setSettings: (s: { mode: string; url: string; allowDirectTools: boolean }) => ipcRenderer.invoke('net:setSettings', s),
+    test: () => ipcRenderer.invoke('net:test'),
+    log: () => ipcRenderer.invoke('net:log'),
+    clearLog: () => ipcRenderer.invoke('net:clearLog'),
+  },
+  keys: {
+    status: () => ipcRenderer.invoke('keys:status'),
+    set: (name: string, value: string) => ipcRenderer.invoke('keys:set', name, value),
+    remove: (name: string) => ipcRenderer.invoke('keys:delete', name),
+  },
+
+  // History snapshots and backups
+  history: {
+    list: (projectId: string) => ipcRenderer.invoke('history:list', projectId),
+    snapshot: (projectId: string, label?: string) => ipcRenderer.invoke('history:snapshot', projectId, label),
+    changes: (projectId: string, id: string, against: 'previous' | 'current') => ipcRenderer.invoke('history:changes', projectId, id, against),
+    file: (projectId: string, id: string, file: string) => ipcRenderer.invoke('history:file', projectId, id, file),
+    restore: (projectId: string, id: string) => ipcRenderer.invoke('history:restore', projectId, id),
+  },
+  backups: {
+    list: (projectId: string) => ipcRenderer.invoke('backup:list', projectId),
+    create: (projectId: string, reason?: string) => ipcRenderer.invoke('backup:create', projectId, reason),
+    remove: (projectId: string, id: string) => ipcRenderer.invoke('backup:delete', projectId, id),
+    restore: (projectId: string, id: string, mode: 'copy' | 'replace') => ipcRenderer.invoke('backup:restore', projectId, id, mode),
+    reveal: (projectId: string) => ipcRenderer.invoke('backup:reveal', projectId),
+    getSettings: () => ipcRenderer.invoke('backup:getSettings'),
+    setSettings: (s: { enabled: boolean; intervalMin: number; keep: number }) => ipcRenderer.invoke('backup:setSettings', s),
+  },
+
   // Entities
   saveEntity: (projectId: string, entityId: string, raw: string) =>
     ipcRenderer.invoke('entities:save', { projectId, entityId, raw }),
@@ -93,6 +131,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // Import investigation (native dialog)
   pickImport: (mode: 'any' | 'zip' | 'folder') => ipcRenderer.invoke('import:pick', mode),
+
+  // Evidence captures and reports
+  evidence: {
+    capture: (projectId: string, sourceId: string, url: string) => ipcRenderer.invoke('evidence:capture', { projectId, sourceId, url }),
+    verify: (projectId: string, sourceId: string, capture: unknown) => ipcRenderer.invoke('evidence:verify', { projectId, sourceId, capture }),
+    open: (projectId: string, sourceId: string, captureId: string, name?: string) =>
+      ipcRenderer.invoke('evidence:open', { projectId, sourceId, captureId, name }),
+    exportFiles: (projectId: string) => ipcRenderer.invoke('evidence:export', projectId),
+    importFiles: (projectId: string, files: { path: string; data: Uint8Array }[]) => ipcRenderer.invoke('evidence:import', { projectId, files }),
+  },
+  saveReportPdf: (html: string, fileName: string) => ipcRenderer.invoke('report:savePdf', { html, fileName }),
 
   // External tools (marketplace)
   tools: {

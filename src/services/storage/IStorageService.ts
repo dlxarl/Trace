@@ -31,6 +31,10 @@ export interface IStorageService {
    */
   deleteProject(id: string, mode?: ProjectRemoveMode): Promise<void>;
   getStorageUsage(): Promise<StorageUsage>;
+  /** Encrypts a case with a passphrase and removes the plain files (desktop only). */
+  lockProject?(id: string, passphrase: string): Promise<void>;
+  /** Decrypts a locked case; `wrong: true` when the passphrase did not match. */
+  unlockProject?(id: string, passphrase: string): Promise<{ wrong?: boolean }>;
 
   // Entities
   saveEntity(projectId: string, entity: Entity): Promise<void>;

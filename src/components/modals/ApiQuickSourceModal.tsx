@@ -401,6 +401,11 @@ export const ApiQuickSourceModal: React.FC<ApiQuickSourceModalProps> = ({
               className="w-full p-2.5 bg-[var(--t-bg)] border border-obsidian-border rounded text-xs font-mono text-zinc-200 focus:outline-none focus:border-[var(--t-accent)]/60 leading-relaxed resize-y"
             />
           )}
+          {typeof window !== 'undefined' && window.electronAPI?.keys && (
+            <div className="mt-1.5 text-[11px] text-zinc-500">
+              Keep secrets out of the request: save a key in Settings → API keys, then write <span className="font-mono text-zinc-300">{'{{key:NAME}}'}</span> in the address, a header or the body.
+            </div>
+          )}
         </div>
 
         {/* Response & Linking Area */}

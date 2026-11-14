@@ -12,6 +12,7 @@ import { spawn, execFile, type ChildProcess } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { routeTool, PROXY_EXTRAS, type NetworkSettings, DEFAULT_NETWORK } from '../src/services/tools/proxy';
 import { TOOL_CATALOG, buildToolArgs, getToolSpec, normaliseToolInput, type ToolSpec } from '../src/services/tools/catalog';
 import { hasPortablePython, installPortablePython, portablePythonExe } from './python';
 
@@ -71,6 +72,10 @@ export class ToolManager {
   constructor(
     private readonly root: string,
     private readonly pythonRoot: string = path.join(path.dirname(root), 'python'),
+    /** Current network settings (proxy / Tor); read on every run. */
+    private readonly getNetwork: () => NetworkSettings = () => DEFAULT_NETWORK,
+    /** Called with what is about to leave the computer, for the outbound log. */
+    private readonly onOutbound: (e: { tool: string; via: string }) => void = () => {},
   ) {}
 
   private dir(spec: ToolSpec) {
@@ -130,7 +135,7 @@ export class ToolManager {
     });
   }
 
-  private exec(cmd: string, args: string[], log: Log, opts: { cwd?: string; timeoutMs: number; runId?: string; capture?: boolean }) {
+  private exec(cmd: string, args: string[], log: Log, opts: { cwd?: string; timeoutMs: number; runId?: string; capture?: boolean; env?: Record<string, string> }) {
     return new Promise<{ code: number | null; stdout: string; stderr: string; timedOut: boolean; cancelled: boolean }>((resolve) => {
       const child = spawn(cmd, args, {
         cwd: opts.cwd,
@@ -138,7 +143,7 @@ export class ToolManager {
         windowsHide: true,
         // Own process group on POSIX so Stop / timeout can kill helpers too.
         detached: !isWin,
-        env: { ...process.env, PYTHONIOENCODING: 'utf-8', PYTHONUNBUFFERED: '1', NO_COLOR: '1', PIP_DISABLE_PIP_VERSION_CHECK: '1' },
+        env: { ...process.env, PYTHONIOENCODING: 'utf-8', PYTHONUNBUFFERED: '1', NO_COLOR: '1', PIP_DISABLE_PIP_VERSION_CHECK: '1', ...(opts.env ?? {}) },
       });
       if (opts.runId) this.running.set(opts.runId, child);
       let stdout = '';
@@ -199,17 +204,40 @@ export class ToolManager {
       fs.rmSync(dir, { recursive: true, force: true });
       return { ok: false, error: 'Could not create a Python virtual environment.' };
     }
-    log(`pip install ${spec.pip.package}`, 'info');
+    const extras = PROXY_EXTRAS[spec.id] ?? [];
+    log(`pip install ${[spec.pip.package, ...extras].join(' ')}`, 'info');
     const vpy = this.venvBin(spec, 'python');
-    const pip = await this.exec(vpy, ['-m', 'pip', 'install', '--no-input', spec.pip.package], log, { timeoutMs: 600_000 });
+    const pip = await this.exec(vpy, ['-m', 'pip', 'install', '--no-input', spec.pip.package, ...extras], log, { timeoutMs: 600_000 });
     if (pip.code !== 0 || !fs.existsSync(this.venvBin(spec, spec.pip.bin))) {
       fs.rmSync(dir, { recursive: true, force: true });
       return { ok: false, error: pip.timedOut ? 'Installation timed out.' : 'pip install failed — see the log.' };
     }
     const show = await this.exec(vpy, ['-m', 'pip', 'show', spec.pip.package], () => {}, { timeoutMs: 30_000, capture: true });
     const version = /^Version:\s*(\S+)/m.exec(show.stdout)?.[1];
-    fs.writeFileSync(this.marker(spec), JSON.stringify({ package: spec.pip.package, version, installed_at: new Date().toISOString() }, null, 2));
+    fs.writeFileSync(this.marker(spec), JSON.stringify({ package: spec.pip.package, version, extras, installed_at: new Date().toISOString() }, null, 2));
     log(`Installed ${spec.name} ${version ?? ''}`.trim(), 'info');
+    return { ok: true };
+  }
+
+  /** Tools installed before proxy support lack the SOCKS helper packages; add them on first proxied run. */
+  private async ensureExtras(spec: ToolSpec, log: Log): Promise<{ ok: true } | { ok: false; error: string }> {
+    const extras = PROXY_EXTRAS[spec.id] ?? [];
+    if (extras.length === 0) return { ok: true };
+    let meta: { extras?: string[] } = {};
+    try {
+      meta = JSON.parse(fs.readFileSync(this.marker(spec), 'utf-8'));
+    } catch {
+      /* no marker */
+    }
+    if (extras.every((e) => meta.extras?.includes(e))) return { ok: true };
+    log(`Adding proxy support (${extras.join(', ')})…`, 'info');
+    const r = await this.exec(this.venvBin(spec, 'python'), ['-m', 'pip', 'install', '--no-input', ...extras], log, { timeoutMs: 300_000 });
+    if (r.code !== 0) return { ok: false, error: 'Could not add proxy support to this tool. Turn the proxy off or reinstall the tool.' };
+    try {
+      fs.writeFileSync(this.marker(spec), JSON.stringify({ ...meta, extras, updated_at: new Date().toISOString() }, null, 2));
+    } catch {
+      /* marker is advisory */
+    }
     return { ok: true };
   }
 
@@ -232,12 +260,21 @@ export class ToolManager {
     if (!fs.existsSync(bin)) return { ok: false as const, error: `${spec.name} is not installed` };
     if (this.running.has(runId)) return { ok: false as const, error: 'Run id already in use' };
 
+    const route = routeTool(spec.id, spec.name, this.getNetwork());
+    if (!route.ok) return { ok: false as const, error: route.error };
+    if (route.via) {
+      const missing = await this.ensureExtras(spec, log);
+      if (!missing.ok) return { ok: false as const, error: missing.error };
+    }
+
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), `trace-${spec.id}-`));
-    const args = buildToolArgs(spec, input.value);
+    const args = [...route.args, ...buildToolArgs(spec, input.value)];
+    log(route.via ? `Routing through ${route.via}` : 'Direct connection (no proxy)', 'info');
     log(`$ ${spec.pip.bin} ${args.join(' ')}`, 'info');
+    this.onOutbound({ tool: spec.name, via: route.via ?? 'direct' });
     const started = Date.now();
     try {
-      const r = await this.exec(bin, args, log, { cwd, timeoutMs: spec.timeoutSec * 1000, runId, capture: true });
+      const r = await this.exec(bin, args, log, { cwd, timeoutMs: spec.timeoutSec * 1000, runId, capture: true, env: route.env });
       return {
         ok: true as const,
         value: input.value,

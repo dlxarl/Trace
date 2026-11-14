@@ -10,6 +10,7 @@ import {
   Relationship,
   RelationshipStatus,
   Source,
+  admiraltyCode,
   evidenceClassOf,
   type EvidenceClass,
 } from '@/types';
@@ -30,6 +31,8 @@ export interface RelationshipRef {
   evidence_class: EvidenceClass;
   confidence: number | null;
   evidence_count: number;
+  valid_from: string | null;
+  valid_to: string | null;
 }
 
 export interface SourceRef {
@@ -38,6 +41,11 @@ export interface SourceRef {
   url: string | null;
   source_type: string;
   captured_at: string | null;
+  /** Admiralty rating, e.g. "B2"; null when unrated. */
+  rating: string | null;
+  archive_url: string | null;
+  /** Preserved copies with SHA-256 hashes. */
+  preserved_copies: number;
 }
 
 const MAX_BODY = 4000;
@@ -54,6 +62,8 @@ export const relationshipRef = (r: Relationship): RelationshipRef => ({
   evidence_class: evidenceClassOf(r.status),
   confidence: r.confidence ?? null,
   evidence_count: (r.evidence || []).length,
+  valid_from: r.valid_from ?? null,
+  valid_to: r.valid_to ?? null,
 });
 
 export const sourceRef = (s: Source): SourceRef => ({
@@ -62,6 +72,9 @@ export const sourceRef = (s: Source): SourceRef => ({
   url: s.url || null,
   source_type: s.source_type,
   captured_at: s.accessed_at || null,
+  rating: admiraltyCode(s) || null,
+  archive_url: s.archive_url || null,
+  preserved_copies: s.captures?.length ?? 0,
 });
 
 function truncate(text: string | undefined, max = MAX_BODY): { text: string; truncated: boolean } {
@@ -297,7 +310,7 @@ export class InvestigationIndex {
   private evidenceSources(r: Relationship) {
     return (r.evidence || []).map((sid) => {
       const s = this.sources.get(sid);
-      return s ? { ...sourceRef(s), missing: false } : { id: sid, title: null, url: null, source_type: null, captured_at: null, missing: true };
+      return s ? { ...sourceRef(s), missing: false } : { id: sid, title: null, url: null, source_type: null, captured_at: null, rating: null, archive_url: null, preserved_copies: 0, missing: true };
     });
   }
 

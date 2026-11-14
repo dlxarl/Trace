@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useMemo } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState, useMemo } from 'react';
 import cytoscape, { Core, EventObject } from 'cytoscape';
 import {
   Entity,
@@ -6,14 +6,17 @@ import {
   ENTITY_TYPES,
   EVIDENCE_CLASSES,
   evidenceClassOf,
+  parsePartialDate,
   ProjectData,
   Relationship,
   RelationshipStatus,
   RELATIONSHIP_STATUSES,
 } from '@/types';
+import { activeAt } from './asOf';
 import { EntityIcon, getEntityTypeColor, getEntityTypeLabel } from '@/components/common/EntityIcon';
 import { graphIconFor } from './graphIcons';
 import { buildGraphStyle } from './graphStyle';
+import { registerGraphSnapshot } from './graphSnapshot';
 import { useTheme } from '@/services/theme';
 import { StatusGlyph } from '@/components/common/StatusBadge';
 import {
@@ -230,6 +233,10 @@ export const GraphView: React.FC<GraphViewProps> = ({
   const [hiddenNodeIds, setHiddenNodeIds] = useState<Set<string>>(new Set());
   const [showNotesOnGraph, setShowNotesOnGraph] = useState<boolean>(true);
   const [showEdgeLabels, setShowEdgeLabels] = useState<boolean>(false);
+
+  // "As of" date: hides links that were not in effect then (undated links stay).
+  const [asOf, setAsOf] = useState<string>('');
+  const asOfValid = !!parsePartialDate(asOf);
 
   // Entity Type and Status Filters
   const [selectedEntityTypes, setSelectedEntityTypes] = useState<Set<EntityType>>(
@@ -789,7 +796,7 @@ export const GraphView: React.FC<GraphViewProps> = ({
       .filter((rel) => {
         const s = relSrc(rel);
         const t = relTgt(rel);
-        return activeNodeIds.has(s) && activeNodeIds.has(t) && (!rel.status || selectedStatuses.has(rel.status));
+        return activeNodeIds.has(s) && activeNodeIds.has(t) && (!rel.status || selectedStatuses.has(rel.status)) && (!asOfValid || activeAt(rel, asOf));
       })
       .map((rel) => {
         const status: RelationshipStatus = rel.status || 'confirmed';
@@ -848,6 +855,8 @@ export const GraphView: React.FC<GraphViewProps> = ({
     projectData.notes,
     selectedEntityTypes,
     selectedStatuses,
+    asOf,
+    asOfValid,
     hiddenNodeIds,
     showNotesOnGraph,
     initialPositions,
@@ -858,7 +867,7 @@ export const GraphView: React.FC<GraphViewProps> = ({
 
   const graphSearchRef = useRef<HTMLInputElement>(null);
   const hiddenFilterCount =
-    ENTITY_TYPES.length - selectedEntityTypes.size + (RELATIONSHIP_STATUSES.length - selectedStatuses.size);
+    ENTITY_TYPES.length - selectedEntityTypes.size + (RELATIONSHIP_STATUSES.length - selectedStatuses.size) + (asOfValid ? 1 : 0);
   const typeCounts = useMemo(() => {
     const m = new Map<string, number>();
     projectData.entities.forEach((e) => m.set(e.type, (m.get(e.type) || 0) + 1));
@@ -1174,6 +1183,28 @@ export const GraphView: React.FC<GraphViewProps> = ({
       cyRef.current = null;
     };
   }, []);
+
+  // Offer a picture of the graph to the report (always on a white page, labels on).
+  // Layout effect: its cleanup runs before Cytoscape is destroyed, so the last picture can be kept.
+  const snapshotProjectId = projectData.project.id;
+  useLayoutEffect(
+    () =>
+      registerGraphSnapshot(snapshotProjectId, () => {
+        const cy = cyRef.current;
+        if (!cy || cy.destroyed() || cy.nodes().length === 0) return undefined;
+        const before = (cy.style() as any).json();
+        const labelled = cy.nodes().filter((n) => !n.hasClass('label-on'));
+        try {
+          cy.style().fromJson(buildGraphStyle(GRAPH_PALETTES.light)).update();
+          if (cy.nodes().length <= 150) labelled.addClass('label-on');
+          return cy.png({ full: true, scale: 2, bg: '#ffffff', maxWidth: 2400, maxHeight: 2400 });
+        } finally {
+          labelled.removeClass('label-on');
+          cy.style().fromJson(before).update();
+        }
+      }),
+    [snapshotProjectId],
+  );
 
   // Light/dark switch: rebuild the stylesheet (edge colours follow via the elements memo).
   useEffect(() => {
@@ -2050,6 +2081,28 @@ export const GraphView: React.FC<GraphViewProps> = ({
                     </label>
                   );
                 })}
+              </div>
+              <div className="h-[26px] flex items-center px-2.5 border-y border-[var(--t-border)]">
+                <span className="t-label">As of date</span>
+              </div>
+              <div className="px-2.5 py-2">
+                <div className="flex items-center gap-1.5">
+                  <input
+                    className={`t-input flex-1 ${asOf && !asOfValid ? '!border-rose-500/60' : ''}`}
+                    placeholder="2021 · 2021-06 · 2021-06-15"
+                    value={asOf}
+                    onChange={(e) => setAsOf(e.target.value)}
+                    aria-label="Show the graph as of this date"
+                  />
+                  {asOf && (
+                    <button type="button" className="text-[11px] text-zinc-500 hover:text-zinc-200" onClick={() => setAsOf('')}>
+                      Clear
+                    </button>
+                  )}
+                </div>
+                <div className="text-[10.5px] text-zinc-600 mt-1 leading-snug">
+                  {asOf && !asOfValid ? 'Use YYYY, YYYY-MM or YYYY-MM-DD.' : 'Hides links that were not in effect then. Links without dates are always shown.'}
+                </div>
               </div>
             </div>
           )}

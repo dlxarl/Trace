@@ -27,7 +27,17 @@ export interface BundleFile {
   /** Path relative to the selection, "/" separated. */
   path: string;
   text: () => Promise<string>;
+  /** Raw bytes, when the source can provide them (zip, browser folder). */
+  bytes?: () => Promise<Uint8Array>;
 }
+
+export interface BundleEvidence {
+  /** evidence/<source>/<capture>/<file> */
+  path: string;
+  bytes: () => Promise<Uint8Array>;
+}
+
+const EVIDENCE_PATH = /^evidence\/[^/]+\/[^/]+\/(screenshot\.png|page\.pdf|page\.mhtml|capture\.json)$/;
 
 export interface CaseBundle {
   data: ProjectData;
@@ -36,6 +46,8 @@ export interface CaseBundle {
   skipped: string[];
   /** Name of the folder / archive the case came from. */
   origin: string;
+  /** Preserved evidence files found next to the case (restored by the desktop app). */
+  evidence?: BundleEvidence[];
 }
 
 export interface ImportedCase {
@@ -45,6 +57,8 @@ export interface ImportedCase {
   renamed: boolean;
   counts: { entities: number; relationships: number; sources: number; notes: number };
   skipped: string[];
+  /** Number of evidence files restored (desktop). */
+  evidenceRestored?: number;
 }
 
 export const MAX_BUNDLE_FILES = 50_000;
@@ -110,10 +124,15 @@ export async function readCaseBundle(files: BundleFile[], origin: string): Promi
     }
   }
 
+  const evidence: BundleEvidence[] = inCase
+    .filter((f) => EVIDENCE_PATH.test(rel(f)) && f.bytes)
+    .map((f) => ({ path: rel(f), bytes: f.bytes! }));
+  const evidencePaths = new Set(evidence.map((e) => e.path));
+
   const known = new Set(['project.md', 'graph-layout.json']);
   const skipped = inCase
     .map(rel)
-    .filter((r) => !known.has(r) && !(SECTIONS.some((s) => r.startsWith(`${s}/`) && r.endsWith('.md') && r.split('/').length === 2)));
+    .filter((r) => !known.has(r) && !evidencePaths.has(r) && !(SECTIONS.some((s) => r.startsWith(`${s}/`) && r.endsWith('.md') && r.split('/').length === 2)));
 
   return {
     data: {
@@ -125,6 +144,7 @@ export async function readCaseBundle(files: BundleFile[], origin: string): Promi
     },
     layout,
     skipped,
+    evidence: evidence.length ? evidence : undefined,
     origin: origin || root.replace(/\/$/, '').split('/').pop() || 'investigation',
   };
 }
@@ -180,7 +200,7 @@ export async function zipToBundleFiles(data: ArrayBuffer | Blob): Promise<Bundle
   const files: BundleFile[] = [];
   zip.forEach((path, entry) => {
     if (entry.dir) return;
-    files.push({ path, text: () => entry.async('string') });
+    files.push({ path, text: () => entry.async('string'), bytes: () => entry.async('uint8array') });
   });
   return files;
 }
@@ -188,8 +208,8 @@ export async function zipToBundleFiles(data: ArrayBuffer | Blob): Promise<Bundle
 /** Browser folder picker (<input webkitdirectory>) or drag-and-drop. */
 export function fileListToBundleFiles(list: FileList | File[]): BundleFile[] {
   return Array.from(list)
-    .filter((f) => f.size <= MAX_FILE_BYTES)
-    .map((f) => ({ path: (f as File & { webkitRelativePath?: string }).webkitRelativePath || f.name, text: () => f.text() }));
+    .filter((f) => f.size <= MAX_FILE_BYTES || (/(^|\/)evidence\//.test((f as File & { webkitRelativePath?: string }).webkitRelativePath || '') && f.size <= 100 * 1024 * 1024))
+    .map((f) => ({ path: (f as File & { webkitRelativePath?: string }).webkitRelativePath || f.name, text: () => f.text(), bytes: async () => new Uint8Array(await f.arrayBuffer()) }));
 }
 
 /** Pre-read files from the desktop main process. */

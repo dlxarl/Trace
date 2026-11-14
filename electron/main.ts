@@ -1,10 +1,18 @@
-import { app, BrowserWindow, ipcMain, dialog, shell, nativeImage, nativeTheme } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, shell, nativeImage, nativeTheme, safeStorage, session } from 'electron';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { ToolManager } from './tools';
 import { readImportSelection } from './caseFiles';
+import { capturePage } from './capturePage';
+import { evidencePath, importEvidenceFiles, listEvidenceFiles, verifyCapture, writeCapture } from './evidenceStore';
 import { collectUsage, removeProjectDir, type RemoveMode } from './diskUsage';
+import { createCaseSafety, normaliseBackupSettings, rewriteProjectIdentity, type CaseSafety } from './caseSafety';
+import { KeyStore } from './keystore';
+import { listVaults, lockCase, unlockCase, vaultPath, WrongPassphraseError } from './vault';
+import { chromiumProxyRules, effectiveProxy, fillKeys, logTarget, maskProxy, NetLog, normaliseNetwork, parseProxyUrl, redactSecrets, type NetworkSettings } from '../src/services/tools/proxy';
+import * as hist from './history';
+import * as bk from './backups';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -13,6 +21,14 @@ let mainWindow: BrowserWindow | null = null;
 let configPath = '';
 let currentWorkspacePath = '';
 let toolManager: ToolManager | null = null;
+let safety: CaseSafety | null = null;
+let keystore: KeyStore | null = null;
+const netLog = new NetLog();
+const networkSettings = (): NetworkSettings => normaliseNetwork(loadConfig().network);
+const viaLabel = () => {
+  const p = effectiveProxy(networkSettings());
+  return p ? maskProxy(p) : 'direct';
+};
 
 interface AppConfig {
   workspacePath?: string;
@@ -20,6 +36,10 @@ interface AppConfig {
   mcpEnabled?: boolean;
   /** Appearance: follows the OS unless forced. */
   theme?: 'system' | 'light' | 'dark';
+  /** Rolling backups of every case (renderer preferences are mirrored here). */
+  backup?: { enabled?: boolean; intervalMin?: number; keep?: number };
+  /** Proxy / Tor for outgoing traffic of tools, page capture and API requests. */
+  network?: { mode?: string; url?: string; allowDirectTools?: boolean };
 }
 
 function loadConfig(): AppConfig {
@@ -179,8 +199,24 @@ app.whenReady().then(() => {
 
   const savedTheme = loadConfig().theme;
   nativeTheme.themeSource = savedTheme === 'light' || savedTheme === 'dark' ? savedTheme : 'system';
-  toolManager = new ToolManager(path.join(app.getPath('userData'), 'tools'));
+  keystore = new KeyStore(path.join(app.getPath('userData'), 'keystore.json'), {
+    available: () => safeStorage.isEncryptionAvailable(),
+    encrypt: (plain) => safeStorage.encryptString(plain),
+    decrypt: (data) => safeStorage.decryptString(data),
+  });
+  toolManager = new ToolManager(path.join(app.getPath('userData'), 'tools'), undefined, networkSettings, (e) =>
+    netLog.add({ kind: 'tool', target: e.tool, via: e.via }),
+  );
+  safety = createCaseSafety({
+    getWorkspace: () => currentWorkspacePath,
+    getCaseDir: getProjectDir,
+    getSettings: () => normaliseBackupSettings(loadConfig().backup),
+  });
+  safety.start();
   setupIpcHandlers();
+  setupSafetyIpc();
+  setupNetworkIpc();
+  setupVaultIpc();
   createWindow();
 
   app.on('activate', () => {
@@ -190,7 +226,10 @@ app.whenReady().then(() => {
   });
 });
 
-app.on('before-quit', () => toolManager?.cancelAll());
+app.on('before-quit', () => {
+  toolManager?.cancelAll();
+  safety?.flush();
+});
 
 function mcpScriptPath(): string {
   return app.isPackaged
@@ -331,6 +370,12 @@ function setupIpcHandlers() {
       }
     }
 
+    // Encrypted cases appear as locked entries until they are unlocked.
+    const have = new Set(summaries.map((x) => x.id));
+    for (const v of listVaults(currentWorkspacePath)) {
+      if (have.has(v.id)) continue; // an unlocked folder wins over a stale vault
+      summaries.push({ id: v.id, name: v.id, locked: true, entityCount: 0, relationshipCount: 0, sourceCount: 0, noteCount: 0, updated_at: v.mtime.toISOString() });
+    }
     return summaries;
   });
 
@@ -396,13 +441,30 @@ function setupIpcHandlers() {
     ensureDirSync(projDir);
     const filePath = path.join(projDir, 'project.md');
     atomicWriteFileSync(filePath, raw);
+    safety?.touch(projectId);
   });
 
   // Projects: Delete
   // mode: 'delete' (permanent, default), 'keep' (moved to <workspace>/removed, files kept), 'trash' (system Trash)
   ipcMain.handle('projects:delete', async (_, id: string, mode?: RemoveMode) => {
     const m: RemoveMode = mode === 'keep' || mode === 'trash' ? mode : 'delete';
-    return removeProjectDir(currentWorkspacePath, getProjectDir(id), m, (p) => shell.trashItem(p));
+    const dir = getProjectDir(id);
+    const vault = vaultPath(currentWorkspacePath, id);
+    if (!fs.existsSync(dir) && fs.existsSync(vault)) {
+      // A locked case: the encrypted file is the case.
+      if (m === 'trash') await shell.trashItem(vault);
+      else if (m === 'keep') {
+        const keepDir = path.join(currentWorkspacePath, 'removed');
+        ensureDirSync(keepDir);
+        fs.renameSync(vault, path.join(keepDir, path.basename(vault)));
+      } else fs.rmSync(vault, { force: true });
+      safety?.forget(id, m === 'delete');
+      return {};
+    }
+    const result = await removeProjectDir(currentWorkspacePath, dir, m, (p) => shell.trashItem(p));
+    // A permanent delete removes the case's history and backups too; 'keep'/'trash' leave them.
+    safety?.forget(id, m === 'delete');
+    return result;
   });
 
   // Disk usage of cases, tools and the portable Python
@@ -432,6 +494,7 @@ function setupIpcHandlers() {
 
   // Entities: Save
   ipcMain.handle('entities:save', async (_, { projectId, entityId, raw }) => {
+    safety?.touch(projectId);
     const filePath = sanitizeRelativePath(
       path.join(getProjectDir(projectId), 'entities'),
       `${entityId}.md`
@@ -441,6 +504,7 @@ function setupIpcHandlers() {
 
   // Entities: Delete
   ipcMain.handle('entities:delete', async (_, { projectId, entityId }) => {
+    safety?.touch(projectId);
     const projDir = getProjectDir(projectId);
     const filePath = sanitizeRelativePath(
       path.join(projDir, 'entities'),
@@ -478,6 +542,7 @@ function setupIpcHandlers() {
 
   // Relationships: Save
   ipcMain.handle('relationships:save', async (_, { projectId, relId, raw }) => {
+    safety?.touch(projectId);
     const filePath = sanitizeRelativePath(
       path.join(getProjectDir(projectId), 'relationships'),
       `${relId}.md`
@@ -487,6 +552,7 @@ function setupIpcHandlers() {
 
   // Relationships: Delete
   ipcMain.handle('relationships:delete', async (_, { projectId, relId }) => {
+    safety?.touch(projectId);
     const filePath = sanitizeRelativePath(
       path.join(getProjectDir(projectId), 'relationships'),
       `${relId}.md`
@@ -498,6 +564,7 @@ function setupIpcHandlers() {
 
   // Sources: Save
   ipcMain.handle('sources:save', async (_, { projectId, sourceId, raw }) => {
+    safety?.touch(projectId);
     const filePath = sanitizeRelativePath(
       path.join(getProjectDir(projectId), 'sources'),
       `${sourceId}.md`
@@ -507,6 +574,7 @@ function setupIpcHandlers() {
 
   // Sources: Delete
   ipcMain.handle('sources:delete', async (_, { projectId, sourceId }) => {
+    safety?.touch(projectId);
     const filePath = sanitizeRelativePath(
       path.join(getProjectDir(projectId), 'sources'),
       `${sourceId}.md`
@@ -518,6 +586,7 @@ function setupIpcHandlers() {
 
   // Notes: Save
   ipcMain.handle('notes:save', async (_, { projectId, noteId, raw }) => {
+    safety?.touch(projectId);
     const filePath = sanitizeRelativePath(
       path.join(getProjectDir(projectId), 'notes'),
       `${noteId}.md`
@@ -527,6 +596,7 @@ function setupIpcHandlers() {
 
   // Notes: Delete
   ipcMain.handle('notes:delete', async (_, { projectId, noteId }) => {
+    safety?.touch(projectId);
     const filePath = sanitizeRelativePath(
       path.join(getProjectDir(projectId), 'notes'),
       `${noteId}.md`
@@ -551,6 +621,7 @@ function setupIpcHandlers() {
   });
 
   ipcMain.handle('graph:saveLayout', async (_, { projectId, layout }) => {
+    safety?.touch(projectId);
     const filePath = sanitizeRelativePath(
       getProjectDir(projectId),
       'graph-layout.json'
@@ -590,6 +661,86 @@ function setupIpcHandlers() {
     });
     if (res.canceled || res.filePaths.length === 0) return null;
     return readImportSelection(res.filePaths[0]);
+  });
+
+  // Evidence: preserve a copy of a source's web page with SHA-256 hashes (see electron/evidenceStore.ts)
+  ipcMain.handle('evidence:capture', async (_, req: { projectId: string; sourceId: string; url: string }) => {
+    try {
+      const projDir = getProjectDir(req.projectId);
+      if (!fs.existsSync(path.join(projDir, 'project.md'))) throw new Error('Project not found');
+      const proxy = effectiveProxy(networkSettings());
+      if (!proxy && networkSettings().mode === 'custom') throw new Error('The proxy address in Settings is not valid. Fix it or turn the proxy off.');
+      netLog.add({ kind: 'capture', target: logTarget(String(req.url)), via: viaLabel() });
+      const page = await capturePage(String(req.url), { proxyRules: proxy ? chromiumProxyRules(proxy) : undefined });
+      const capture = writeCapture(
+        projDir,
+        String(req.sourceId),
+        { url: String(req.url), final_url: page.finalUrl, title: page.title, tool: `TRACE ${app.getVersion()}` },
+        { screenshot: page.screenshot, pdf: page.pdf, mhtml: page.mhtml },
+      );
+      return { ok: true, capture, warnings: page.warnings };
+    } catch (err: any) {
+      return { ok: false, error: err?.message || 'Capture failed' };
+    }
+  });
+  ipcMain.handle('evidence:import', async (_, req: { projectId: string; files: { path: string; data: Uint8Array }[] }) => {
+    try {
+      return { ok: true, ...importEvidenceFiles(getProjectDir(req.projectId), Array.isArray(req.files) ? req.files : []) };
+    } catch (err: any) {
+      return { ok: false, error: err?.message || 'Import failed' };
+    }
+  });
+  ipcMain.handle('evidence:verify', async (_, req: { projectId: string; sourceId: string; capture: { id: string; files: { name: string; sha256: string }[] } }) => {
+    try {
+      const files = Array.isArray(req.capture?.files) ? req.capture.files.map((f) => ({ name: String(f.name), sha256: String(f.sha256) })) : [];
+      return { ok: true, files: verifyCapture(getProjectDir(req.projectId), String(req.sourceId), { id: String(req.capture?.id), files }) };
+    } catch (err: any) {
+      return { ok: false, error: err?.message || 'Verification failed' };
+    }
+  });
+  ipcMain.handle('evidence:open', async (_, req: { projectId: string; sourceId: string; captureId: string; name?: string }) => {
+    try {
+      const target = evidencePath(getProjectDir(req.projectId), String(req.sourceId), String(req.captureId), req.name === undefined ? undefined : String(req.name));
+      if (!fs.existsSync(target)) return { ok: false, error: 'File not found' };
+      if (req.name === undefined) shell.showItemInFolder(target);
+      else await shell.openPath(target);
+      return { ok: true };
+    } catch (err: any) {
+      return { ok: false, error: err?.message || 'Could not open' };
+    }
+  });
+  ipcMain.handle('evidence:export', async (_, projectId: string) => {
+    try {
+      return { ok: true, files: listEvidenceFiles(getProjectDir(projectId)).map((f) => ({ path: f.path, data: new Uint8Array(f.data) })) };
+    } catch (err: any) {
+      return { ok: false, error: err?.message || 'Could not read evidence' };
+    }
+  });
+
+  // Report: render the generated HTML to PDF and let the user choose where to save it.
+  ipcMain.handle('report:savePdf', async (_, req: { html: string; fileName: string }) => {
+    const html = String(req?.html ?? '');
+    if (!html || html.length > 30 * 1024 * 1024) return { ok: false, error: 'Report is empty or too large' };
+    const name = String(req?.fileName || 'report').replace(/[^\w.\- ]+/g, '_').slice(0, 80);
+    const res = await dialog.showSaveDialog(mainWindow!, { title: 'Save report as PDF', defaultPath: `${name}.pdf`, filters: [{ name: 'PDF', extensions: ['pdf'] }] });
+    if (res.canceled || !res.filePath) return { ok: false, cancelled: true };
+    const tmpDir = fs.mkdtempSync(path.join(app.getPath('temp'), 'trace-report-'));
+    const win = new BrowserWindow({ show: false, webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false, javascript: false } });
+    try {
+      win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+      win.webContents.on('will-navigate', (e) => e.preventDefault());
+      const file = path.join(tmpDir, 'report.html');
+      fs.writeFileSync(file, html);
+      await win.loadFile(file);
+      const pdf = await win.webContents.printToPDF({ printBackground: true, pageSize: 'A4', margins: { top: 0.5, bottom: 0.5, left: 0.5, right: 0.5 } });
+      atomicWriteFileSync(res.filePath, pdf);
+      return { ok: true, path: res.filePath };
+    } catch (err: any) {
+      return { ok: false, error: err?.message || 'Could not create the PDF' };
+    } finally {
+      if (!win.isDestroyed()) win.destroy();
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
   });
 
   // External OSINT tools (catalog only; see electron/tools.ts)
@@ -658,17 +809,34 @@ function setupIpcHandlers() {
     body?: string;
   }) => {
     const startTime = Date.now();
+    const secrets: string[] = [];
     try {
       const parsedUrl = new URL(req.url);
       if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
         throw new Error('Only HTTP and HTTPS protocols are permitted');
       }
+      // {{key:NAME}} placeholders are filled here, so secrets never pass through the window or a case file.
+      const fill = (text: string) =>
+        fillKeys(text, (name) => {
+          const v = keystore?.get(name);
+          if (v !== undefined) secrets.push(v);
+          return v;
+        });
+      const url = fill(req.url);
+      const headers = req.headers ? Object.fromEntries(Object.entries(req.headers).map(([k, v]) => [k, fill(String(v))])) : undefined;
       const isBodyAllowed = req.method && !['GET', 'HEAD'].includes(req.method.toUpperCase());
-      const response = await fetch(req.url, {
-        method: req.method || 'GET',
-        headers: req.headers,
-        body: isBodyAllowed ? req.body : undefined,
-      });
+      const body = isBodyAllowed && typeof req.body === 'string' ? fill(req.body) : undefined;
+
+      const proxy = effectiveProxy(networkSettings());
+      if (!proxy && networkSettings().mode === 'custom') throw new Error('The proxy address in Settings is not valid. Fix it or turn the proxy off.');
+      netLog.add({ kind: 'api', target: logTarget(req.url), via: viaLabel() });
+      let doFetch: typeof fetch = fetch;
+      if (proxy) {
+        const ses = session.fromPartition('trace-api');
+        await ses.setProxy({ proxyRules: chromiumProxyRules(proxy) });
+        doFetch = ((u: any, init: any) => ses.fetch(u, init)) as typeof fetch;
+      }
+      const response = await doFetch(url, { method: req.method || 'GET', headers, body });
 
       const contentType = response.headers.get('content-type') || '';
       let data: any;
@@ -681,10 +849,11 @@ function setupIpcHandlers() {
       } else {
         data = await response.text();
       }
+      if (secrets.length) data = typeof data === 'string' ? redactSecrets(data, secrets) : JSON.parse(redactSecrets(JSON.stringify(data), secrets));
 
       const responseHeaders: Record<string, string> = {};
       response.headers.forEach((val, key) => {
-        responseHeaders[key] = val;
+        responseHeaders[key] = secrets.length ? redactSecrets(val, secrets) : val;
       });
 
       return {
@@ -698,9 +867,187 @@ function setupIpcHandlers() {
     } catch (err: any) {
       return {
         success: false,
-        error: err.message || 'Network request failed',
+        error: redactSecrets(err.message || 'Network request failed', secrets),
         durationMs: Date.now() - startTime,
       };
     }
+  });
+}
+
+/** Encrypted cases. */
+function setupVaultIpc() {
+  ipcMain.handle('vault:lock', async (_, id: string, pass: string) => {
+    try {
+      const caseDir = getProjectDir(id);
+      if (!fs.existsSync(path.join(caseDir, 'project.md'))) return { ok: false as const, error: 'Case not found.' };
+      // Plain copies in history and backups would defeat the lock, so they go too.
+      const r = await lockCase({
+        workspace: currentWorkspacePath,
+        id,
+        caseDir,
+        pass: String(pass ?? ''),
+        also: [path.join(currentWorkspacePath, '.trace', 'history', id), path.join(currentWorkspacePath, '.trace', 'backups', id)],
+      });
+      safety?.forget(id, false);
+      return { ok: true as const, files: r.files };
+    } catch (err: any) {
+      return { ok: false as const, error: err?.message || 'Could not lock the case' };
+    }
+  });
+  ipcMain.handle('vault:unlock', async (_, id: string, pass: string) => {
+    try {
+      const r = await unlockCase({ workspace: currentWorkspacePath, id, caseDir: getProjectDir(id), pass: String(pass ?? '') });
+      safety?.touch(id);
+      return { ok: true as const, files: r.files };
+    } catch (err: any) {
+      return { ok: false as const, wrong: err instanceof WrongPassphraseError, error: err?.message || 'Could not unlock the case' };
+    }
+  });
+}
+
+/** Proxy / Tor settings, the outbound log and the API-key store. */
+function setupNetworkIpc() {
+  ipcMain.handle('net:getSettings', async () => ({ ...networkSettings(), active: effectiveProxy(networkSettings()) ? viaLabel() : null }));
+  ipcMain.handle('net:setSettings', async (_, raw: any) => {
+    if (raw?.mode === 'custom') {
+      const p = parseProxyUrl(String(raw.url ?? ''));
+      if (!p.ok) return { ok: false as const, error: p.error };
+      raw = { ...raw, url: p.url };
+    }
+    const next = normaliseNetwork(raw);
+    saveConfig({ network: next });
+    return { ok: true as const, settings: { ...next, active: effectiveProxy(next) ? viaLabel() : null } };
+  });
+  // Shows the address websites see. Goes through the proxy when one is set.
+  ipcMain.handle('net:test', async () => {
+    const proxy = effectiveProxy(networkSettings());
+    try {
+      let doFetch: typeof fetch = fetch;
+      if (proxy) {
+        const ses = session.fromPartition('trace-api');
+        await ses.setProxy({ proxyRules: chromiumProxyRules(proxy) });
+        doFetch = ((u: any, init: any) => ses.fetch(u, init)) as typeof fetch;
+      }
+      netLog.add({ kind: 'check', target: 'check.torproject.org/api/ip', via: viaLabel() });
+      const ctl = new AbortController();
+      const timer = setTimeout(() => ctl.abort(), 20_000);
+      try {
+        const r = await doFetch('https://check.torproject.org/api/ip', { signal: ctl.signal });
+        const j: any = await r.json();
+        return { ok: true as const, ip: String(j.IP ?? ''), isTor: j.IsTor === true, via: viaLabel() };
+      } finally {
+        clearTimeout(timer);
+      }
+    } catch (err: any) {
+      return { ok: false as const, error: proxy ? 'Could not connect through the proxy. Is it running?' : err?.message || 'Connection failed' };
+    }
+  });
+  ipcMain.handle('net:log', async () => netLog.list());
+  ipcMain.handle('net:clearLog', async () => {
+    netLog.clear();
+  });
+
+  // Availability is NOT probed here: on macOS the first use of the system keychain can show a permission
+  // prompt, and Settings must open without waiting for it. Saving reports a clear error if storage is missing.
+  ipcMain.handle('keys:status', async () => ({ available: true, names: keystore?.names() ?? [] }));
+  ipcMain.handle('keys:set', async (_, name: string, value: string) => {
+    try {
+      keystore!.set(String(name), String(value));
+      return { ok: true as const };
+    } catch (err: any) {
+      return { ok: false as const, error: err?.message || 'Could not save the key' };
+    }
+  });
+  ipcMain.handle('keys:delete', async (_, name: string) => keystore!.delete(String(name)));
+}
+
+/** History snapshots and backups of cases. */
+function setupSafetyIpc() {
+  const need = () => {
+    if (!safety) throw new Error('Not ready');
+    return safety;
+  };
+  const rel = (v: unknown) => {
+    const r = String(v ?? '');
+    if (!/^(project\.md|graph-layout\.json|(entities|relationships|sources|notes)\/[^/\\]+\.md)$/.test(r)) throw new Error('Not a case file');
+    return r;
+  };
+
+  ipcMain.handle('history:list', async (_, projectId: string) => {
+    getProjectDir(projectId);
+    return hist.listSnapshots(need().historyDir(projectId));
+  });
+  ipcMain.handle('history:snapshot', async (_, projectId: string, label?: string) => {
+    return need().snapshotNow(getProjectDir(projectId) && projectId, 'manual', typeof label === 'string' && label.trim() ? label.trim() : undefined, true);
+  });
+  ipcMain.handle('history:changes', async (_, projectId: string, id: string, against: 'previous' | 'current') => {
+    const s = need();
+    return hist.changesOf(s.historyDir(projectId), String(id), against === 'current' ? { caseDir: getProjectDir(projectId) } : 'previous');
+  });
+  ipcMain.handle('history:file', async (_, projectId: string, id: string, file: string) => {
+    const s = need();
+    const r = rel(file);
+    let now: string | null = null;
+    try {
+      now = fs.readFileSync(path.join(getProjectDir(projectId), r), 'utf8');
+    } catch {
+      now = null;
+    }
+    return { snapshot: hist.readFileAt(s.historyDir(projectId), String(id), r), now };
+  });
+  ipcMain.handle('history:restore', async (_, projectId: string, id: string) => {
+    const s = need();
+    const caseDir = getProjectDir(projectId);
+    s.snapshotNow(projectId, 'before-restore', 'Before restoring ' + id, true);
+    const r = hist.restoreSnapshot(s.historyDir(projectId), caseDir, String(id));
+    s.touch(projectId);
+    return r;
+  });
+
+  ipcMain.handle('backup:list', async (_, projectId: string) => {
+    getProjectDir(projectId);
+    return bk.listBackups(need().backupDir(projectId));
+  });
+  ipcMain.handle('backup:create', async (_, projectId: string, reason?: string) => {
+    const s = need();
+    getProjectDir(projectId);
+    const r: bk.BackupReason = reason === 'before-merge' ? 'before-merge' : 'manual';
+    return s.backupNow(projectId, r);
+  });
+  ipcMain.handle('backup:delete', async (_, projectId: string, id: string) => {
+    getProjectDir(projectId);
+    bk.deleteBackup(need().backupDir(projectId), String(id));
+  });
+  ipcMain.handle('backup:reveal', async (_, projectId: string) => {
+    getProjectDir(projectId);
+    const dir = need().backupDir(projectId);
+    fs.mkdirSync(dir, { recursive: true });
+    await shell.openPath(dir);
+  });
+  // mode 'copy' restores as a new case; 'replace' overwrites the case after a safety backup.
+  ipcMain.handle('backup:restore', async (_, projectId: string, id: string, mode: 'copy' | 'replace') => {
+    const s = need();
+    const dir = s.backupDir(projectId);
+    if (mode === 'replace') {
+      const caseDir = getProjectDir(projectId);
+      await s.backupNow(projectId, 'before-restore');
+      await bk.restoreBackupInto(dir, String(id), caseDir, true);
+      s.touch(projectId);
+      return { id: projectId };
+    }
+    let newId = `${projectId}-restored`;
+    for (let n = 2; fs.existsSync(getProjectDir(newId)); n++) newId = `${projectId}-restored-${n}`;
+    const target = getProjectDir(newId);
+    await bk.restoreBackupInto(dir, String(id), target, false);
+    const pm = path.join(target, 'project.md');
+    atomicWriteFileSync(pm, rewriteProjectIdentity(fs.readFileSync(pm, 'utf8'), newId, '(restored)'));
+    s.touch(newId);
+    return { id: newId };
+  });
+  ipcMain.handle('backup:getSettings', async () => normaliseBackupSettings(loadConfig().backup));
+  ipcMain.handle('backup:setSettings', async (_, raw: unknown) => {
+    const next = normaliseBackupSettings(raw);
+    saveConfig({ backup: next });
+    return next;
   });
 }

@@ -27,6 +27,7 @@ import {
   Upload,
   FileInput,
   Blocks,
+  CalendarRange,
   RefreshCw,
   ExternalLink,
   Copy,
@@ -442,6 +443,9 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
         </RailButton>
         <RailButton active={activeTabType === 'search'} title="Full-text search  (⌘F)" onClick={() => onOpenTab('search', undefined, 'Full-Text Search')}>
           <Search />
+        </RailButton>
+        <RailButton active={activeTabType === 'timeline'} title="Timeline — relationship periods and source dates" onClick={() => onOpenTab('timeline', undefined, 'Timeline')}>
+          <CalendarRange />
         </RailButton>
         <RailButton active={activeTabType === 'tools'} title={isDesktop ? 'Tools — run OSINT tools, marketplace, MCP' : 'Tools — OSINT tool marketplace'} onClick={() => onOpenTab('tools', undefined, 'Tools')}>
           <Blocks />
