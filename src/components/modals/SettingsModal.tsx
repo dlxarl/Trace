@@ -9,12 +9,29 @@ import {
   Keyboard,
   Loader2,
   ExternalLink,
+  SlidersHorizontal,
+  HardDrive,
+  Network as NetworkIcon,
+  Info,
 } from 'lucide-react';
 import { ReleaseNotes } from '@/components/common/ReleaseNotes';
+import { Toggle } from '@/components/common/Toggle';
+import { Row, Section } from '@/components/common/SettingsParts';
+import { NetworkSection } from './NetworkSection';
+import { usePreferences, setPreferences } from '@/services/preferences';
 import { useReleaseNotes } from '@/services/updates/useReleaseNotes';
 import type { ProjectSummary, StorageUsage, Workspace } from '@/types';
 import { formatBytes } from '@/utils/format';
+import { useTheme, type ThemeMode } from '@/services/theme';
 import { checkForUpdates, RELEASES_PAGE_URL, type UpdateCheckResult } from '@/services/updates/updateChecker';
+
+type SettingsTab = 'general' | 'files' | 'network' | 'about';
+const SETTINGS_TABS: { id: SettingsTab; label: string; icon: React.ComponentType<{ className?: string }>; desktopOnly?: boolean }[] = [
+  { id: 'general', label: 'General', icon: SlidersHorizontal },
+  { id: 'files', label: 'Files & storage', icon: HardDrive },
+  { id: 'network', label: 'Network & keys', icon: NetworkIcon, desktopOnly: true },
+  { id: 'about', label: 'About & updates', icon: Info },
+];
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -27,6 +44,8 @@ interface SettingsModalProps {
   onExportZip: () => void;
   onRebuildIndex: () => void;
   onOpenShortcuts: () => void;
+  /** Opens History & backups for the active case. */
+  onOpenHistory?: () => void;
   /** Changes whenever cases are added or removed, so the usage numbers refresh. */
   projectsVersion?: ProjectSummary[];
   loadStorageUsage?: () => Promise<StorageUsage>;
@@ -45,6 +64,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onExportZip,
   onRebuildIndex,
   onOpenShortcuts,
+  onOpenHistory,
   projectsVersion,
   loadStorageUsage,
   onDeleteProject,
@@ -59,6 +79,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     return localStorage.getItem('trace_settings_aura') !== 'false';
   });
   const [resetConfirm, setResetConfirm] = useState(false);
+  const { mode: themeMode, setMode: setThemeMode } = useTheme();
+  const { autosave } = usePreferences();
+  const [tab, setTab] = useState<SettingsTab>('general');
   const [updateState, setUpdateState] = useState<'idle' | 'checking'>('idle');
   const [updateResult, setUpdateResult] = useState<UpdateCheckResult | null>(null);
 
@@ -114,15 +137,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-[70] flex items-center justify-center p-6 bg-black/55"
+      className="fixed inset-0 z-[70] flex items-center justify-center p-6 bg-[var(--t-overlay)]"
       onMouseDown={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div className="bg-[var(--t-panel)] border border-[#2e2f34] rounded-[4px] w-full max-w-[760px] shadow-popover flex flex-col max-h-[85vh] overflow-hidden text-[12px]">
+      <div className="bg-[var(--t-panel)] border border-[var(--t-border-strong)] rounded-[4px] w-full max-w-[760px] shadow-popover flex flex-col max-h-[85vh] overflow-hidden text-[12px]">
         {/* Header */}
         <div className="h-[48px] shrink-0 flex items-center justify-between pl-5 pr-3 border-b border-[var(--t-border)]">
           <div className="min-w-0">
             <h2 className="text-[13px] font-semibold text-zinc-100 leading-tight">Application Settings</h2>
-            <p className="text-[11px] text-zinc-500 leading-tight mt-0.5">Storage, graph and keyboard preferences</p>
+            <p className="text-[11px] text-zinc-500 leading-tight mt-0.5">Appearance, saving, files, network and updates</p>
           </div>
           <button type="button" onClick={onClose} className="t-icon-btn" title="Close  (Esc)">
             <X />
@@ -130,7 +153,24 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         </div>
 
         {/* Body */}
-        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
+        <div className="flex-1 min-h-0 flex">
+        <nav aria-label="Settings sections" className="w-[168px] shrink-0 border-r border-[var(--t-border)] py-2 overflow-y-auto">
+          {SETTINGS_TABS.filter((t) => !t.desktopOnly || isDesktop).map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              aria-current={tab === t.id ? 'page' : undefined}
+              onClick={() => setTab(t.id)}
+              className={`w-full text-left px-4 h-[30px] flex items-center gap-2 text-[12px] ${tab === t.id ? 'bg-[var(--t-active)] text-zinc-100 border-l-2 border-[var(--t-accent)] pl-[14px]' : 'text-zinc-400 hover:text-zinc-100 hover:bg-[var(--t-hover)]'}`}
+            >
+              <t.icon className="w-3.5 h-3.5 opacity-70" />
+              {t.label}
+            </button>
+          ))}
+        </nav>
+        <div className="flex-1 min-w-0 overflow-y-auto px-5 py-4 space-y-5">
+{tab === 'files' && (
+<>
           <Section title="Workspace & File System">
             <Row
               label={isDesktop ? 'Working directory' : 'Browser offline storage'}
@@ -175,7 +215,55 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           {loadStorageUsage && (
             <StorageSection isOpen={isOpen} version={projectsVersion} load={loadStorageUsage} activeProjectId={activeProjectId} onDeleteProject={onDeleteProject} />
           )}
+</>
+)}
 
+{tab === 'general' && (
+<>
+          <Section title="Appearance">
+            <Row label="Theme" description="Follow the system setting, or always use light or dark">
+              <div role="radiogroup" aria-label="Theme" className="flex items-stretch h-[24px] border border-[var(--t-border)] rounded-[3px] overflow-hidden">
+                {([
+                  { id: 'system', label: 'System' },
+                  { id: 'light', label: 'Light' },
+                  { id: 'dark', label: 'Dark' },
+                ] as { id: ThemeMode; label: string }[]).map((t) => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={themeMode === t.id}
+                    onClick={() => setThemeMode(t.id)}
+                    className={`px-3 text-[11.5px] border-l border-[var(--t-border)] first:border-l-0 ${
+                      themeMode === t.id ? 'bg-[var(--t-active)] text-zinc-100' : 'text-zinc-500 hover:text-zinc-200 hover:bg-[var(--t-hover)]'
+                    }`}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+            </Row>
+          </Section>
+
+          <Section title="Saving">
+            <Row label="Autosave" description="Save edits a moment after you stop typing. Turn off to save only with the Save button.">
+              <Toggle on={autosave} onClick={() => setPreferences({ autosave: !autosave })} />
+            </Row>
+            {isDesktop && (
+              <Row label="Versions and backups" description="Every case keeps a version history and rolling backups.">
+                <button type="button" className="t-btn" disabled={!activeProjectId} onClick={onOpenHistory} title={activeProjectId ? undefined : 'Open a case first'}>
+                  Open…
+                </button>
+              </Row>
+            )}
+          </Section>
+</>
+)}
+
+{tab === 'network' && isDesktop && <NetworkSection isOpen={isOpen} />}
+
+{tab === 'general' && (
+<>
           <Section title="Graph & Physics">
             <Row label="Interactive repulsion physics" description="Nearby nodes repel when you drag an entity">
               <Toggle on={physicsBounce} onClick={handlePhysicsToggle} />
@@ -222,6 +310,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </Row>
           </Section>
 
+</>
+)}
+
+{tab === 'about' && (
+<>
           <Section title="About & Updates">
             <Row label="Trace" description={`Installed version ${__APP_VERSION__}`}>
               <button type="button" onClick={handleCheckForUpdates} className="t-btn" disabled={updateState === 'checking'}>
@@ -243,13 +336,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <button
                 type="button"
                 onClick={handleClearData}
-                className={`t-btn ${resetConfirm ? '!bg-rose-500/80 !border-rose-500/80 !text-white' : '!text-rose-400 hover:!border-rose-500/50'}`}
+                className={`t-btn ${resetConfirm ? '!bg-rose-500/80 !border-rose-500/80 !text-on-accent' : '!text-rose-400 hover:!border-rose-500/50'}`}
               >
                 <Trash2 className="w-3.5 h-3.5 opacity-80" />
                 {resetConfirm ? 'Click again to confirm' : 'Reset storage'}
               </button>
             </Row>
           </Section>
+</>
+)}
+        </div>
         </div>
 
         {/* Footer */}
@@ -301,6 +397,7 @@ const StorageSection: React.FC<{
               { label: 'Installed tools', bytes: usage.toolsBytes },
               { label: 'Portable Python', bytes: usage.pythonBytes },
               { label: 'Removed, kept on disk', bytes: usage.removedBytes },
+              { label: 'Versions & backups', bytes: usage.safetyBytes ?? 0 },
             ]
           : [{ label: 'Settings & other', bytes: Math.max(0, usage.totalBytes - usage.projectsBytes) }]),
       ].filter((p) => p.bytes > 0 || p.label === 'Investigations')
@@ -457,51 +554,4 @@ const UpdateResultRow: React.FC<{ result: UpdateCheckResult }> = ({ result }) =>
   );
 };
 
-/** Settings section: label above one bordered group of rows. */
-const Section: React.FC<{ title: string; danger?: boolean; children: React.ReactNode }> = ({ title, danger, children }) => (
-  <section>
-    <h3 className={`t-label mb-2 ${danger ? '!text-rose-400/80' : '!text-zinc-500'}`}>{title}</h3>
-    <div
-      className={`rounded-[4px] border divide-y ${
-        danger ? 'border-rose-500/25 divide-rose-500/15 bg-rose-950/10' : 'border-[var(--t-border)] divide-[var(--t-border)] bg-[var(--t-raised)]/40'
-      }`}
-    >
-      {children}
-    </div>
-  </section>
-);
 
-/** One setting: label + description on the left, control right-aligned (or below when stacked). */
-const Row: React.FC<{ label: string; description?: string; stacked?: boolean; children: React.ReactNode }> = ({
-  label,
-  description,
-  stacked,
-  children,
-}) =>
-  stacked ? (
-    <div className="px-4 py-3">
-      <div className="text-[12px] font-medium text-zinc-200">{label}</div>
-      {description && <div className="text-[11px] text-zinc-500 mt-0.5 mb-2">{description}</div>}
-      {children}
-    </div>
-  ) : (
-    <div className="px-4 py-3 flex items-center gap-6 min-h-[52px]">
-      <div className="flex-1 min-w-0">
-        <div className="text-[12px] font-medium text-zinc-200">{label}</div>
-        {description && <div className="text-[11px] text-zinc-500 mt-0.5">{description}</div>}
-      </div>
-      <div className="shrink-0 flex items-center">{children}</div>
-    </div>
-  );
-
-const Toggle: React.FC<{ on: boolean; onClick: () => void }> = ({ on, onClick }) => (
-  <button
-    type="button"
-    role="switch"
-    aria-checked={on}
-    onClick={onClick}
-    className={`w-8 h-[18px] rounded-full p-[2px] flex transition-colors ${on ? 'bg-[var(--t-accent)] justify-end' : 'bg-zinc-700 justify-start'}`}
-  >
-    <span className="w-[14px] h-[14px] rounded-full bg-white" />
-  </button>
-);

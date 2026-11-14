@@ -25,11 +25,11 @@ export const Dialog: React.FC<DialogProps> = ({ isOpen, onClose, title, subtitle
 
   if (!isOpen) return null;
   return (
-    <div className="fixed inset-0 flex items-start justify-center pt-[12vh] p-4 bg-black/55" style={{ zIndex }} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+    <div className="fixed inset-0 flex items-start justify-center pt-[12vh] p-4 bg-[var(--t-overlay)]" style={{ zIndex }} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div
         role="dialog"
         aria-modal="true"
-        className="bg-[var(--t-panel)] border border-[#2e2f34] rounded-[4px] w-full flex flex-col max-h-[76vh] shadow-popover text-[12px]"
+        className="bg-[var(--t-panel)] border border-[var(--t-border-strong)] rounded-[4px] w-full flex flex-col max-h-[76vh] shadow-popover text-[12px]"
         style={{ maxWidth: width }}
       >
         <div className="h-[32px] shrink-0 flex items-center gap-2 pl-3 pr-1.5 border-b border-[var(--t-border)]">

@@ -114,6 +114,58 @@ export const SOURCE_TYPES: { type: SourceType; label: string }[] = [
   { type: 'other', label: 'Other' },
 ];
 
+/**
+ * Admiralty (NATO) rating: how reliable the source is (A–F) and how credible
+ * this particular piece of information is (1–6). Optional on every source.
+ */
+export type SourceReliability = 'A' | 'B' | 'C' | 'D' | 'E' | 'F';
+export type InfoCredibility = '1' | '2' | '3' | '4' | '5' | '6';
+
+export const SOURCE_RELIABILITY: { code: SourceReliability; label: string }[] = [
+  { code: 'A', label: 'Completely reliable' },
+  { code: 'B', label: 'Usually reliable' },
+  { code: 'C', label: 'Fairly reliable' },
+  { code: 'D', label: 'Not usually reliable' },
+  { code: 'E', label: 'Unreliable' },
+  { code: 'F', label: 'Reliability cannot be judged' },
+];
+
+export const INFO_CREDIBILITY: { code: InfoCredibility; label: string }[] = [
+  { code: '1', label: 'Confirmed by other sources' },
+  { code: '2', label: 'Probably true' },
+  { code: '3', label: 'Possibly true' },
+  { code: '4', label: 'Doubtful' },
+  { code: '5', label: 'Improbable' },
+  { code: '6', label: 'Truth cannot be judged' },
+];
+
+/** "B2", "A", "–3" or '' when unrated. */
+export function admiraltyCode(s: { reliability?: string; credibility?: string }): string {
+  if (!s.reliability && !s.credibility) return '';
+  return `${s.reliability || '–'}${s.credibility || ''}`;
+}
+
+/** One file of a preserved copy of a source, with its SHA-256. */
+export interface EvidenceFile {
+  name: string;
+  kind: 'screenshot' | 'pdf' | 'mhtml';
+  sha256: string;
+  bytes: number;
+}
+
+/** A preserved copy of a web source taken at a point in time (desktop app). */
+export interface EvidenceCapture {
+  /** Folder name under evidence/<source-id>/, a UTC timestamp. */
+  id: string;
+  captured_at: string;
+  url: string;
+  final_url?: string;
+  title?: string;
+  files: EvidenceFile[];
+  /** TRACE version that made the capture. */
+  tool?: string;
+}
+
 // Zod schemas for runtime validation
 export const EntityFrontmatterSchema = z.object({
   id: z.string(),
@@ -189,6 +241,9 @@ export interface Relationship {
   status: RelationshipStatus;
   confidence: number | null;
   evidence: string[]; // source IDs
+  /** When the relationship held (ISO date, optional): e.g. director from 2019-03 to 2022-06. */
+  valid_from?: string;
+  valid_to?: string;
   created_at: string;
   markdownBody: string;
   extraFrontmatter?: Record<string, any>;
@@ -201,6 +256,13 @@ export interface Source {
   url?: string;
   accessed_at: string;
   source_type: SourceType;
+  /** Admiralty rating (optional). */
+  reliability?: SourceReliability;
+  credibility?: InfoCredibility;
+  /** Link to an archived copy (e.g. Wayback Machine). */
+  archive_url?: string;
+  /** Preserved copies with hashes (files live in evidence/<source-id>/<capture-id>/). */
+  captures?: EvidenceCapture[];
   markdownBody: string;
   extraFrontmatter?: Record<string, any>;
 }
@@ -234,6 +296,8 @@ export interface ProjectSummary {
   sourceCount: number;
   noteCount: number;
   updated_at: string;
+  /** Encrypted at rest; unlock it with its passphrase to open (desktop). */
+  locked?: boolean;
 }
 
 export interface QuickSource {
@@ -282,6 +346,8 @@ export interface StorageUsage {
   projectsBytes: number;
   /** Cases removed from TRACE but kept on disk (desktop only). */
   removedBytes: number;
+  /** Version history and backups (desktop only). */
+  safetyBytes?: number;
   toolsBytes: number;
   pythonBytes: number;
   /** Everything above added up. */
@@ -318,6 +384,8 @@ export type TabType =
   | 'note'
   | 'search'
   | 'tools'
+  | 'timeline'
+  | 'records'
   | 'settings';
 
 export interface Tab {
@@ -334,4 +402,42 @@ export interface StorageChangeEvent {
   type: 'reload' | 'create' | 'update' | 'delete';
   targetType: 'project' | 'entity' | 'relationship' | 'source' | 'note';
   targetId?: string;
+}
+
+/** Accepts YYYY, YYYY-MM or YYYY-MM-DD; anything else is not a usable date. */
+export function parsePartialDate(v: unknown): { iso: string; ms: number; precision: 'year' | 'month' | 'day' } | null {
+  if (typeof v !== 'string') return null;
+  const m = /^(\d{4})(?:-(\d{2})(?:-(\d{2}))?)?$/.exec(v.trim());
+  if (!m) return null;
+  const y = Number(m[1]);
+  const mo = m[2] ? Number(m[2]) : 1;
+  const d = m[3] ? Number(m[3]) : 1;
+  if (mo < 1 || mo > 12 || d < 1 || d > 31) return null;
+  const ms = Date.UTC(y, mo - 1, d);
+  const back = new Date(ms);
+  if (back.getUTCMonth() !== mo - 1) return null; // e.g. 2026-02-31
+  return { iso: v.trim(), ms, precision: m[3] ? 'day' : m[2] ? 'month' : 'year' };
+}
+
+// ── History snapshots and backups (desktop) ─────────────────────────────────
+export type SnapshotReason = 'auto' | 'manual' | 'before-restore' | 'before-merge' | 'import' | 'other';
+export interface SnapshotInfo {
+  id: string;
+  at: string;
+  reason: SnapshotReason;
+  label?: string;
+  fileCount: number;
+}
+export interface FileChange {
+  path: string;
+  status: 'added' | 'removed' | 'modified';
+  label?: string;
+}
+export type BackupReason = 'auto' | 'manual' | 'before-restore' | 'before-delete' | 'before-merge';
+export interface BackupInfo {
+  id: string;
+  file: string;
+  reason: BackupReason;
+  at: string;
+  bytes: number;
 }

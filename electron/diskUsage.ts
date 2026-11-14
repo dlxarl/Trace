@@ -49,6 +49,8 @@ export interface UsageReport {
   projects: { id: string; name: string; bytes: number; files: number }[];
   projectsBytes: number;
   removedBytes: number;
+  /** Version history and backups (<workspace>/.trace). */
+  safetyBytes: number;
   toolsBytes: number;
   pythonBytes: number;
   totalBytes: number;
@@ -74,8 +76,9 @@ export async function collectUsage(opts: {
     }),
   );
   projects.sort((a, b) => b.bytes - a.bytes);
-  const [removed, tools, python] = await Promise.all([
+  const [removed, safety, tools, python] = await Promise.all([
     dirSize(path.join(opts.workspacePath, 'removed')),
+    dirSize(path.join(opts.workspacePath, '.trace')),
     dirSize(opts.toolsDir),
     dirSize(opts.pythonDir),
   ]);
@@ -86,9 +89,10 @@ export async function collectUsage(opts: {
     projects,
     projectsBytes,
     removedBytes: removed.bytes,
+    safetyBytes: safety.bytes,
     toolsBytes: tools.bytes,
     pythonBytes: python.bytes,
-    totalBytes: projectsBytes + removed.bytes + tools.bytes + python.bytes,
+    totalBytes: projectsBytes + removed.bytes + safety.bytes + tools.bytes + python.bytes,
   };
 }
 

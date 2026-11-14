@@ -84,8 +84,8 @@ export const NewEntityModal: React.FC<NewEntityModalProps> = ({
   const activePhoto = photoDataUrl || photoUrl.trim();
 
   return (
-    <div className="fixed inset-0 z-[70] bg-black/65 flex items-center justify-center p-4">
-      <div className="bg-[var(--t-panel)] border border-[#2e2f34] rounded-[4px] max-w-md w-full shadow-popover overflow-hidden text-[12px] animate-in zoom-in-95 duration-150">
+    <div className="fixed inset-0 z-[70] bg-[var(--t-overlay)] flex items-center justify-center p-4">
+      <div className="bg-[var(--t-panel)] border border-[var(--t-border-strong)] rounded-[4px] max-w-md w-full shadow-popover overflow-hidden text-[12px] animate-in zoom-in-95 duration-150">
         {/* Header */}
         <div className="h-[32px] flex items-center justify-between pl-3 pr-1.5 border-b border-[var(--t-border)]">
           <div className="flex items-center space-x-2 font-semibold text-obsidian-text">
@@ -115,7 +115,7 @@ export const NewEntityModal: React.FC<NewEntityModalProps> = ({
                   onClick={() => setType(t.type)}
                   className={`flex items-center space-x-1.5 p-1.5 rounded-md text-left transition-colors ${
                     type === t.type
-                      ? 'bg-obsidian-accent text-white font-medium shadow-sm'
+                      ? 'bg-obsidian-accent text-on-accent font-medium shadow-sm'
                       : 'hover:bg-obsidian-hover text-obsidian-muted'
                   }`}
                 >
@@ -179,7 +179,7 @@ export const NewEntityModal: React.FC<NewEntityModalProps> = ({
                       setPhotoDataUrl('');
                       setPhotoUrl('');
                     }}
-                    className="absolute inset-0 bg-black/60 flex items-center justify-center text-rose-300 opacity-0 hover:opacity-100 transition-opacity"
+                    className="absolute inset-0 bg-[var(--t-overlay)] flex items-center justify-center text-rose-300 opacity-0 hover:opacity-100 transition-opacity"
                     title="Remove"
                   >
                     <X className="w-3.5 h-3.5" />

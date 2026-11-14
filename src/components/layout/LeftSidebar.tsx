@@ -1,3 +1,4 @@
+import { Tooltip } from '@/components/common/Tooltip';
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   Entity,
@@ -27,6 +28,7 @@ import {
   Upload,
   FileInput,
   Blocks,
+  CalendarRange,
   RefreshCw,
   ExternalLink,
   Copy,
@@ -50,6 +52,9 @@ import {
   Filter,
   ArrowDownAZ,
   ArrowDownWideNarrow,
+  PanelLeftClose,
+  Table2,
+  PanelLeftOpen,
 } from 'lucide-react';
 import { Select } from '@/components/common/Select';
 
@@ -100,25 +105,60 @@ interface LeftSidebarProps {
 
 type ExplorerView = 'entities' | 'links' | 'sources' | 'notes' | 'tools';
 
-const RailButton: React.FC<{ active?: boolean; title: string; onClick?: () => void; children: React.ReactNode }> = ({
+const RailButton: React.FC<{ active?: boolean; title: string; label: string; expanded?: boolean; shortcut?: string; onClick?: () => void; children: React.ReactNode }> = ({
   active,
   title,
+  label,
+  expanded,
+  shortcut,
   onClick,
   children,
-}) => (
-  <button
-    type="button"
-    onClick={onClick}
-    title={title}
-    className={`relative w-[30px] h-[28px] flex items-center justify-center rounded-[3px] [&>svg]:w-[15px] [&>svg]:h-[15px] ${
-      active
-        ? 'text-zinc-100 before:absolute before:-left-[4px] before:top-1 before:bottom-1 before:w-[2px] before:bg-[var(--t-accent)]'
-        : 'text-zinc-500 hover:text-zinc-200 hover:bg-[var(--t-hover)]'
-    }`}
-  >
-    {children}
-  </button>
-);
+}) => {
+  const description = RAIL_HELP[label] ?? (title.includes('—') ? title.split('—').slice(1).join('—').trim() : undefined);
+  return (
+    <Tooltip tip={{ title: label, shortcut, description }}>
+      <button
+        type="button"
+        onClick={onClick}
+        className={`relative h-[28px] flex items-center rounded-[3px] [&>svg]:w-[15px] [&>svg]:h-[15px] [&>svg]:shrink-0 ${
+          expanded ? 'w-full px-2 gap-2.5 justify-start' : 'w-[30px] justify-center'
+        } ${
+          active
+            ? 'text-zinc-100 before:absolute before:-left-[4px] before:top-1 before:bottom-1 before:w-[2px] before:bg-[var(--t-accent)]'
+            : 'text-zinc-500 hover:text-zinc-200 hover:bg-[var(--t-hover)]'
+        }`}
+      >
+        {children}
+        {expanded && (
+          <>
+            <span className="text-[11.5px] truncate flex-1 text-left">{label}</span>
+            {shortcut && <span className="text-[10px] text-zinc-600 font-mono shrink-0">{shortcut}</span>}
+          </>
+        )}
+      </button>
+    </Tooltip>
+  );
+};
+
+/** What each rail button does, in one line. */
+const RAIL_HELP: Record<string, string> = {
+  Graph: 'The investigation as a link graph: drag, connect and filter entities.',
+  'Case brief': 'Objective, key numbers and the working document of this case.',
+  Records: 'Every entity as a sortable table or cards, with bulk tag, merge and delete.',
+  Search: 'Search names, aliases, attributes, sources and notes.',
+  Timeline: 'Relationship periods and source dates on one time axis.',
+  Tools: 'Run OSINT tools, browse the marketplace, manage the MCP server.',
+  'Import data': 'Add results from SpiderFoot, CSV files, indicator lists or JSON, after a review.',
+  'Import case': 'Open an investigation from a .zip or folder as a new case.',
+  'Export case': 'Save this case as a .zip you can share or back up.',
+  Shortcuts: 'All keyboard shortcuts in one sheet.',
+  Settings: 'Appearance, saving, storage, network and updates.',
+  Collapse: 'Hide the labels and keep only icons.',
+  'Show labels': 'Show a name next to each icon.',
+};
+
+const RailGroup: React.FC<{ title: string; expanded: boolean }> = ({ title, expanded }) =>
+  expanded ? <div className="t-label px-2 pt-2 pb-0.5 w-full">{title}</div> : <div className="w-5 h-px bg-[var(--t-border)] my-1" aria-hidden />;
 
 interface SidebarContextMenuState {
   visible: boolean;
@@ -406,6 +446,23 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
     { id: 'tools', label: 'Bookmarks', count: quickSources.length },
   ];
 
+  const [railExpanded, setRailExpanded] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('trace_rail_expanded') === '1';
+    } catch {
+      return false;
+    }
+  });
+  const toggleRail = () =>
+    setRailExpanded((v) => {
+      try {
+        localStorage.setItem('trace_rail_expanded', v ? '0' : '1');
+      } catch {
+        /* preference lasts for this session */
+      }
+      return !v;
+    });
+
   const handleAdd = () => {
     if (view === 'entities') onCreateEntityModal();
     else if (view === 'links') onCreateRelationshipModal();
@@ -433,50 +490,57 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
       />
 
       {/* Activity rail */}
-      <nav className="w-[38px] shrink-0 flex flex-col items-center py-1.5 gap-0.5 border-r border-[var(--t-border)] bg-[var(--t-bg)]">
-        <RailButton active={activeTabType === 'graph'} title="Graph  (⌘G)" onClick={() => onOpenTab('graph', undefined, 'Interactive Graph')}>
+      <nav
+        aria-label="Main navigation"
+        className={`${railExpanded ? 'w-[148px] items-stretch px-1.5' : 'w-[38px] items-center'} shrink-0 flex flex-col py-1.5 gap-0.5 border-r border-[var(--t-border)] bg-[var(--t-bg)]`}
+      >
+        <RailGroup title="View" expanded={railExpanded} />
+        <RailButton expanded={railExpanded} label="Graph" shortcut="⌘G" active={activeTabType === 'graph'} title="Graph  (⌘G)" onClick={() => onOpenTab('graph', undefined, 'Interactive Graph')}>
           <Network />
         </RailButton>
-        <RailButton active={activeTabType === 'overview'} title="Case brief  (⌘O)" onClick={() => onOpenTab('overview', undefined, 'Project Overview')}>
+        <RailButton expanded={railExpanded} label="Case brief" shortcut="⌘O" active={activeTabType === 'overview'} title="Case brief  (⌘O)" onClick={() => onOpenTab('overview', undefined, 'Project Overview')}>
           <LayoutDashboard />
         </RailButton>
-        <RailButton active={activeTabType === 'search'} title="Full-text search  (⌘F)" onClick={() => onOpenTab('search', undefined, 'Full-Text Search')}>
+ <RailButton expanded={railExpanded} label="Records" active={activeTabType === 'records'} title="Records — all entities as a sortable table or cards, with bulk actions" onClick={() => onOpenTab('records', undefined, 'Records')}>
+          <Table2 />
+        </RailButton>
+        <RailButton expanded={railExpanded} label="Search" shortcut="⌘F" active={activeTabType === 'search'} title="Full-text search  (⌘F)" onClick={() => onOpenTab('search', undefined, 'Full-Text Search')}>
           <Search />
         </RailButton>
-        <RailButton active={activeTabType === 'tools'} title={isDesktop ? 'Tools — run OSINT tools, marketplace, MCP' : 'Tools — OSINT tool marketplace'} onClick={() => onOpenTab('tools', undefined, 'Tools')}>
+        <RailButton expanded={railExpanded} label="Timeline" active={activeTabType === 'timeline'} title="Timeline — relationship periods and source dates" onClick={() => onOpenTab('timeline', undefined, 'Timeline')}>
+          <CalendarRange />
+        </RailButton>
+        <RailGroup title="Tools" expanded={railExpanded} />
+        <RailButton expanded={railExpanded} label="Tools" active={activeTabType === 'tools'} title={isDesktop ? 'Tools — run OSINT tools, marketplace, MCP' : 'Tools — OSINT tool marketplace'} onClick={() => onOpenTab('tools', undefined, 'Tools')}>
           <Blocks />
         </RailButton>
         <div className="flex-1" />
+        <RailGroup title="Data" expanded={railExpanded} />
         {onImportData && activeProjectId && (
-          <RailButton title="Import tool output (SpiderFoot, CSV, indicator list, JSON)" onClick={onImportData}>
+          <RailButton expanded={railExpanded} label="Import data" title="Import tool output (SpiderFoot, CSV, indicator list, JSON)" onClick={onImportData}>
             <FileInput />
           </RailButton>
         )}
-        <RailButton title="Import case archive (.zip)" onClick={onImportZip}>
+        <RailButton expanded={railExpanded} label="Import case" title="Import case archive (.zip) or folder" onClick={onImportZip}>
           <Upload />
         </RailButton>
-        <RailButton title="Export case archive (.zip)" onClick={onExportZip}>
+        <RailButton expanded={railExpanded} label="Export case" title="Export case archive (.zip)" onClick={onExportZip}>
           <Download />
         </RailButton>
-        {onOpenInExplorer && (
-          <RailButton title={isDesktop ? 'Reveal case folder' : 'Download case files'} onClick={() => onOpenInExplorer(activeProjectId)}>
-            <FolderOpen />
-          </RailButton>
-        )}
-        <RailButton title="Rebuild full-text index" onClick={onRebuildIndex}>
-          <RefreshCw />
-        </RailButton>
-        <div className="w-5 h-px bg-[var(--t-border)] my-1" />
+        <RailGroup title="App" expanded={railExpanded} />
         {onOpenShortcuts && (
-          <RailButton title="Keyboard shortcuts  (?)" onClick={onOpenShortcuts}>
+          <RailButton expanded={railExpanded} label="Shortcuts" shortcut="?" title="Keyboard shortcuts  (?)" onClick={onOpenShortcuts}>
             <Keyboard />
           </RailButton>
         )}
         {onOpenSettings && (
-          <RailButton title="Settings  (⌘,)" onClick={onOpenSettings}>
+          <RailButton expanded={railExpanded} label="Settings" shortcut="⌘," title="Settings  (⌘,)" onClick={onOpenSettings}>
             <Settings />
           </RailButton>
         )}
+        <RailButton expanded={railExpanded} label={railExpanded ? 'Collapse' : 'Show labels'} title={railExpanded ? 'Collapse to icons' : 'Show labels next to icons'} onClick={toggleRail}>
+          {railExpanded ? <PanelLeftClose /> : <PanelLeftOpen />}
+        </RailButton>
       </nav>
 
       {/* Explorer */}
@@ -850,7 +914,7 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
                 else if (contextMenu.itemType === 'note') onDeleteNote?.(contextMenu.itemId);
                 setContextMenu(null);
               }}
-              className="t-menu-item !text-rose-400 hover:!bg-rose-500/70 hover:!text-white"
+              className="t-menu-item !text-rose-400 hover:!bg-rose-500/70 hover:!text-on-accent"
             >
               <Trash2 className="w-3.5 h-3.5" />
               <span>Delete {contextMenu.itemType}</span>
@@ -861,7 +925,7 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
 
       {/* Modal to add new Quick Source */}
       {newQuickSourceOpen && (
-        <div className="fixed inset-0 z-[70] bg-black/55 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[70] bg-[var(--t-overlay)] flex items-center justify-center p-4">
           <div className="bg-[var(--t-panel)] border border-[var(--t-border)] rounded max-w-sm w-full shadow-popover text-xs">
             <div className="t-panel-head justify-between">
               <div className="text-[12px] font-semibold text-zinc-100">

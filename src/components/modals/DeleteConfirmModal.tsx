@@ -60,7 +60,7 @@ export const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
           </button>
           <button
             type="button"
-            className="t-btn !bg-rose-500/80 !border-rose-500/80 !text-white hover:!bg-rose-500"
+            className="t-btn !bg-rose-500/80 !border-rose-500/80 !text-on-accent hover:!bg-rose-500"
             onClick={() => {
               onConfirm(diskChoice ? mode : undefined);
               onClose();

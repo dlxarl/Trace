@@ -254,7 +254,7 @@ export const ApiQuickSourceModal: React.FC<ApiQuickSourceModalProps> = ({
   const isMethodWithBody = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method);
 
   return (
-    <div className="fixed inset-0 z-[70] bg-black/55 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[70] bg-[var(--t-overlay)] flex items-center justify-center p-4">
       <div className="bg-[var(--t-raised)] border border-obsidian-border rounded max-w-3xl w-full shadow-popover flex flex-col max-h-[90vh] overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-3.5 border-b border-obsidian-border bg-[var(--t-panel)]">
@@ -401,6 +401,11 @@ export const ApiQuickSourceModal: React.FC<ApiQuickSourceModalProps> = ({
               className="w-full p-2.5 bg-[var(--t-bg)] border border-obsidian-border rounded text-xs font-mono text-zinc-200 focus:outline-none focus:border-[var(--t-accent)]/60 leading-relaxed resize-y"
             />
           )}
+          {typeof window !== 'undefined' && window.electronAPI?.keys && (
+            <div className="mt-1.5 text-[11px] text-zinc-500">
+              Keep secrets out of the request: save a key in Settings → API keys, then write <span className="font-mono text-zinc-300">{'{{key:NAME}}'}</span> in the address, a header or the body.
+            </div>
+          )}
         </div>
 
         {/* Response & Linking Area */}
@@ -528,7 +533,7 @@ export const ApiQuickSourceModal: React.FC<ApiQuickSourceModalProps> = ({
                             type="button"
                             onClick={handleLinkToEntity}
                             disabled={!selectedEntityId}
-                            className="w-1/2 px-2.5 py-1.5 bg-purple-600 hover:bg-purple-500 text-white font-semibold text-xs rounded-lg transition-colors"
+                            className="w-1/2 px-2.5 py-1.5 bg-purple-600 hover:bg-purple-500 text-on-accent font-semibold text-xs rounded-lg transition-colors"
                           >
                             Save Attr
                           </button>
@@ -538,7 +543,7 @@ export const ApiQuickSourceModal: React.FC<ApiQuickSourceModalProps> = ({
                           type="button"
                           onClick={handleLinkToEntity}
                           disabled={!selectedEntityId}
-                          className="w-full px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white font-semibold text-xs rounded-lg flex items-center justify-center space-x-1.5 transition-colors disabled:opacity-50"
+                          className="w-full px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-on-accent font-semibold text-xs rounded-lg flex items-center justify-center space-x-1.5 transition-colors disabled:opacity-50"
                         >
                           <Link2 className="w-3.5 h-3.5" />
                           <span>Link to Entity</span>

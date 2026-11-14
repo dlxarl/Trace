@@ -1,4 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { useAutosave } from '@/hooks/useAutosave';
+import { SaveBadge } from '@/components/common/SaveBadge';
 import { Note, ProjectData } from '@/types';
 import { MarkdownEditor } from '@/components/common/MarkdownEditor';
 import { Save, Trash2, FileText, X } from 'lucide-react';
@@ -6,7 +8,7 @@ import { Save, Trash2, FileText, X } from 'lucide-react';
 interface NoteEditorProps {
   note: Note;
   projectData: ProjectData;
-  onSave: (note: Note) => void;
+  onSave: (note: Note, opts?: { auto?: boolean }) => void;
   onDelete: (noteId: string) => void;
   onOpenEntity: (entityId: string) => void;
 }
@@ -22,7 +24,14 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   const [tagInput, setTagInput] = useState<string>('');
   const [isDirty, setIsDirty] = useState<boolean>(false);
 
+  const dirtyRef = useRef(false);
+  dirtyRef.current = isDirty;
+  const autoRef = useRef(false);
+  const draftIdRef = useRef(note.id);
   useEffect(() => {
+    // A save that completes while you keep typing must not overwrite the newer text.
+    if (dirtyRef.current && draftIdRef.current === note.id) return;
+    draftIdRef.current = note.id;
     setDraft({ ...note });
     setIsDirty(false);
   }, [note]);
@@ -33,9 +42,15 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   };
 
   const handleSave = () => {
-    onSave(draft);
+    onSave(draft, { auto: autoRef.current });
     setIsDirty(false);
   };
+
+  useAutosave(isDirty, draft, () => {
+    autoRef.current = true;
+    handleSave();
+    autoRef.current = false;
+  });
 
   const addTag = () => {
     if (!tagInput.trim()) return;
@@ -60,11 +75,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
           <div>
             <div className="flex items-center space-x-2">
               <span className="font-mono text-[10.5px] text-zinc-600">{draft.id}</span>
-              {isDirty && (
-                <span className="text-[10.5px] text-amber-400">
-                  Unsaved changes
-                </span>
-              )}
+              <SaveBadge dirty={isDirty} />
             </div>
             <h1 className="text-[13.5px] font-semibold text-zinc-50 leading-tight">{draft.title}</h1>
           </div>

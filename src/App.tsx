@@ -38,8 +38,25 @@ import { ShortcutsModal } from '@/components/modals/ShortcutsModal';
 import { SettingsModal } from '@/components/modals/SettingsModal';
 import { ImportDataModal } from '@/components/modals/ImportDataModal';
 import { WhatsNewModal } from '@/components/modals/WhatsNewModal';
+import { ReportModal } from '@/components/modals/ReportModal';
+import { MergeEntitiesModal } from '@/components/modals/MergeEntitiesModal';
+import { buildTemplateRecords, getTemplate } from '@/services/templates/caseTemplates';
+import { buildPaletteCommands } from '@/components/modals/paletteCommands';
+import { markSaved } from '@/services/saveStatus';
+import { usePreferences, setPreferences } from '@/services/preferences';
+import { setThemeMode } from '@/services/theme';
+import { WelcomeTour, tourSeen } from '@/components/modals/WelcomeTour';
+import { PassphraseModal } from '@/components/modals/PassphraseModal';
+import { ExportGraphModal } from '@/components/modals/ExportGraphModal';
+import { ExtractTextModal } from '@/components/modals/ExtractTextModal';
+import { HistoryModal } from '@/components/modals/HistoryModal';
+import { applyMerge, planMerge } from '@/services/merge/mergeEntities';
 import { LAST_SEEN_KEY, cacheNotes, fetchReleaseNotes, whatsNewDecision, type ReleaseInfo } from '@/services/updates/updateChecker';
 import { ToolsView } from '@/features/tools/ToolsView';
+import { Scratchpad, SCRATCH_ID } from '@/components/common/Scratchpad';
+import { extractIndicators } from '@/services/extract/extractIndicators';
+import { RecordsView } from '@/features/records/RecordsView';
+import { TimelineView } from '@/features/timeline/TimelineView';
 import {
   fileListToBundleFiles,
   readCaseBundle,
@@ -64,6 +81,10 @@ import {
   Plus,
   Check,
   Search as SearchIcon,
+  Lock,
+  ScanText,
+  FileInput,
+  StickyNote,
 } from 'lucide-react';
 import saveAs from 'file-saver';
 
@@ -183,6 +204,15 @@ export function App() {
   const [importDataOpen, setImportDataOpen] = useState<boolean>(false);
   const [importBatch, setImportBatch] = useState<ImportBatch | null>(null);
   const [whatsNew, setWhatsNew] = useState<ReleaseInfo | null>(null);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [extractOpen, setExtractOpen] = useState(false);
+  const [exportGraphOpen, setExportGraphOpen] = useState(false);
+  const [tourOpen, setTourOpen] = useState(false);
+  const [vaultDialog, setVaultDialog] = useState<{ mode: 'lock' | 'unlock'; id: string; name: string } | null>(null);
+  const prefs = usePreferences();
+  const [mergeEntityId, setMergeEntityId] = useState<string | null>(null);
+  const [mergePreselect, setMergePreselect] = useState<string[]>([]);
 
   // After the app was updated to a new version, show its release notes once.
   useEffect(() => {
@@ -814,10 +844,14 @@ export function App() {
       let targetProjectId = ws.activeProjectId || sample.project.id;
       if (targetProjectId) {
         setActiveProjectId(targetProjectId);
-        let data = await storage.getProject(targetProjectId);
-        if (!data && projs.length > 0) {
-          data = await storage.getProject(projs[0].id);
-          setActiveProjectId(projs[0].id);
+        let data = projs.find((p) => p.id === targetProjectId)?.locked ? null : await storage.getProject(targetProjectId);
+        if (!data) {
+          const firstOpen = projs.find((p) => !p.locked);
+          if (firstOpen) {
+            data = await storage.getProject(firstOpen.id);
+            targetProjectId = firstOpen.id;
+            setActiveProjectId(firstOpen.id);
+          }
         }
         setProjectData(data);
         setLoadingProgress(90);
@@ -880,6 +914,13 @@ export function App() {
     };
   }, [loadWorkspaceData, storage]);
 
+  // First run: a short tour, once the case has loaded.
+  useEffect(() => {
+    if (initialLoading || !projectData || tourSeen()) return;
+    const t = setTimeout(() => setTourOpen(true), 600);
+    return () => clearTimeout(t);
+  }, [initialLoading, projectData]);
+
   // Global Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -935,6 +976,11 @@ export function App() {
   // Switch Active Project
   const handleSelectProject = async (projectId: string) => {
     if (projectId === activeProjectId) return;
+    const target = projects.find((p) => p.id === projectId);
+    if (target?.locked) {
+      setVaultDialog({ mode: 'unlock', id: target.id, name: target.name });
+      return;
+    }
     setIsLoading(true);
     setActiveProjectId(projectId);
 
@@ -997,6 +1043,8 @@ export function App() {
           ? 'Full-Text Search'
           : type === 'tools'
           ? 'Tools'
+          : type === 'timeline'
+          ? 'Timeline'
           : `${type.toUpperCase()} Record`);
 
       const wantsPreview =
@@ -1011,7 +1059,8 @@ export function App() {
           t.type !== 'graph' &&
           t.type !== 'overview' &&
           t.type !== 'search' &&
-          t.type !== 'tools'
+          t.type !== 'tools' &&
+          t.type !== 'timeline'
       );
 
       const newTab: Tab = {
@@ -1105,13 +1154,14 @@ export function App() {
     setTabs((prev) => (prev.some((t) => t.id === tabId && t.title !== title) ? prev.map((t) => (t.id === tabId ? { ...t, title } : t)) : prev));
 
   // Entity Actions
-  const handleSaveEntity = async (entity: Entity) => {
+  const handleSaveEntity = async (entity: Entity, opts?: { auto?: boolean }) => {
     if (!activeProjectId) return;
     await storage.saveEntity(activeProjectId, entity);
     renameTab(`tab-entity-${entity.id}`, entity.name);
     const updated = await storage.getProject(activeProjectId);
     setProjectData(updated);
-    showToast(`Entity "${entity.name}" saved`);
+    markSaved();
+    if (!opts?.auto) showToast(`Entity "${entity.name}" saved`);
   };
 
   const handleDeleteEntity = (entityId: string) => {
@@ -1146,14 +1196,48 @@ export function App() {
     });
   };
 
+  /** Deleting several entities at once (Records view). One confirmation, one safety snapshot. */
+  const handleDeleteEntities = (ids: string[]) => {
+    if (!activeProjectId || !projectData) return;
+    if (ids.length === 1) return handleDeleteEntity(ids[0]);
+    const set = new Set(ids);
+    const rels = projectData.relationships.filter((r) => set.has(r.source_entity) || set.has(r.target_entity));
+    setDeleteModalState({
+      isOpen: true,
+      title: 'Delete Entities',
+      itemName: `${ids.length} entities`,
+      filePaths: [...ids.slice(0, 8).map((id) => `projects/${activeProjectId}/entities/${id}.md`), ...(ids.length > 8 ? [`… and ${ids.length - 8} more entities`] : []), ...(rels.length ? [`${rels.length} connected relationship record(s)`] : [])],
+      warningMessage: rels.length > 0 ? `This also removes ${rels.length} connected relationship record(s).${storage.isDesktop() ? ' A version of the case is saved first, so it can be restored from History.' : ''}` : undefined,
+      onConfirm: async () => {
+        await window.electronAPI?.history?.snapshot(activeProjectId, `Before deleting ${ids.length} entities`).catch(() => null);
+        for (const id of ids) {
+          await storage.deleteEntity(activeProjectId, id);
+          closeTab(`tab-entity-${id}`);
+        }
+        setProjectData(await storage.getProject(activeProjectId));
+        if (selectedEntityId && set.has(selectedEntityId)) setSelectedEntityId(undefined);
+        showToast(`${ids.length} entities deleted`);
+      },
+    });
+  };
+
+  const handleSaveEntities = async (entities: Entity[]) => {
+    if (!activeProjectId) return;
+    for (const e of entities) await storage.saveEntity(activeProjectId, e);
+    setProjectData(await storage.getProject(activeProjectId));
+    markSaved();
+    showToast(`${entities.length} entit${entities.length === 1 ? 'y' : 'ies'} updated`);
+  };
+
   // Relationship Actions
-  const handleSaveRelationship = async (rel: Relationship) => {
+  const handleSaveRelationship = async (rel: Relationship, opts?: { auto?: boolean }) => {
     if (!activeProjectId) return;
     await storage.saveRelationship(activeProjectId, rel);
     renameTab(`tab-relationship-${rel.id}`, `Rel: ${rel.type}`);
     const updated = await storage.getProject(activeProjectId);
     setProjectData(updated);
-    showToast(`Relationship "${rel.type}" saved`);
+    markSaved();
+    if (!opts?.auto) showToast(`Relationship "${rel.type}" saved`);
   };
 
   // Inspector shortcuts ------------------------------------------------------
@@ -1226,13 +1310,14 @@ export function App() {
   };
 
   // Source Actions
-  const handleSaveSource = async (source: Source) => {
+  const handleSaveSource = async (source: Source, opts?: { auto?: boolean }) => {
     if (!activeProjectId) return;
     await storage.saveSource(activeProjectId, source);
     renameTab(`tab-source-${source.id}`, source.title);
     const updated = await storage.getProject(activeProjectId);
     setProjectData(updated);
-    showToast(`Source "${source.title}" saved`);
+    markSaved();
+    if (!opts?.auto) showToast(`Source "${source.title}" saved`);
   };
 
   const handleDeleteSource = (sourceId: string) => {
@@ -1258,13 +1343,14 @@ export function App() {
   };
 
   // Note Actions
-  const handleSaveNote = async (note: Note) => {
+  const handleSaveNote = async (note: Note, opts?: { auto?: boolean }) => {
     if (!activeProjectId) return;
     await storage.saveNote(activeProjectId, note);
     renameTab(`tab-note-${note.id}`, note.title);
     const updated = await storage.getProject(activeProjectId);
     setProjectData(updated);
-    showToast(`Note "${note.title}" saved`);
+    markSaved();
+    if (!opts?.auto) showToast(`Note "${note.title}" saved`);
   };
 
   const handleDeleteNote = (noteId: string) => {
@@ -1288,8 +1374,13 @@ export function App() {
   };
 
   // Project Actions
-  const handleCreateProject = async (name: string, description: string) => {
+  const handleCreateProject = async (name: string, description: string, template?: { id: string; subject: string }) => {
     const proj = await storage.createProject(name, description);
+    if (template && template.id !== 'blank') {
+      const { entity, note } = buildTemplateRecords(getTemplate(template.id), template.subject);
+      if (entity) await storage.saveEntity(proj.id, entity);
+      if (note) await storage.saveNote(proj.id, note);
+    }
     await loadWorkspaceData();
     openTab('overview', undefined, 'Project Overview');
     showToast(`Created project: ${proj.name}`);
@@ -1353,6 +1444,43 @@ export function App() {
     }
   };
 
+  const createSource = () => {
+    if (!activeProjectId) return;
+    const now = new Date().toISOString();
+    const newSource: Source = {
+      id: `src-${Date.now().toString(36)}`,
+      type: 'source',
+      title: 'New Evidence Source',
+      accessed_at: now,
+      source_type: 'webpage',
+      markdownBody: '# New Source\n\n## Extract\n\nRecord excerpt...\n\n## Notes\n\nNotes...',
+    };
+    storage.saveSource(activeProjectId, newSource).then(async () => {
+      const updated = await storage.getProject(activeProjectId);
+      setProjectData(updated);
+      openTab('source', newSource.id, newSource.title);
+    });
+  };
+
+  const createNote = () => {
+    if (!activeProjectId) return;
+    const now = new Date().toISOString();
+    const newNote: Note = {
+      id: `note-${Date.now().toString(36)}`,
+      type: 'note',
+      title: 'Investigation Note',
+      tags: [],
+      created_at: now,
+      updated_at: now,
+      markdownBody: '# Investigation Note\n\nRecord observations...',
+    };
+    storage.saveNote(activeProjectId, newNote).then(async () => {
+      const updated = await storage.getProject(activeProjectId);
+      setProjectData(updated);
+      openTab('note', newNote.id, newNote.title);
+    });
+  };
+
   // Import external tool output (reviewed in ImportDataModal). Only creates
   // records; existing entities are referenced, never rewritten.
   const handleCommitImport = async (records: ImportRecords) => {
@@ -1373,7 +1501,7 @@ export function App() {
     setActiveProjectId(r.id);
     openTab('overview', undefined, 'Project Overview');
     const n = r.counts;
-    const base = `Imported "${r.name}" · ${n.entities} entities, ${n.relationships} links`;
+    const base = `Imported "${r.name}" · ${n.entities} entities, ${n.relationships} links${r.evidenceRestored ? `, ${r.evidenceRestored} evidence file(s)` : ''}`;
     showToast(
       r.renamed ? `${base} — saved as a copy, a case with this id already exists` : r.skipped.length ? `${base} · ${r.skipped.length} unrelated file(s) ignored` : base,
     );
@@ -1548,7 +1676,13 @@ export function App() {
                     >
                       <span className="w-3 shrink-0">{isActive && <Check />}</span>
                       <span className="truncate flex-1">{p.name}</span>
-                      <span className="text-[10px] font-mono opacity-60 shrink-0">{p.entityCount}</span>
+                      {p.locked ? (
+                        <span className="text-[10px] flex items-center gap-1 opacity-70 shrink-0" title="Encrypted. Click to unlock.">
+                          <Lock className="w-3 h-3" /> locked
+                        </span>
+                      ) : (
+                        <span className="text-[10px] font-mono opacity-60 shrink-0">{p.entityCount}</span>
+                      )}
                     </button>
                   );
                 })}
@@ -1712,41 +1846,8 @@ export function App() {
             onAddEntityAttribute={handleAddEntityAttribute}
             onCreateNoteOnEntity={handleCreateNoteOnEntity}
             onUpdateQuickSource={handleUpdateQuickSource}
-            onCreateSourceModal={() => {
-              if (!activeProjectId) return;
-              const now = new Date().toISOString();
-              const newSource: Source = {
-                id: `src-${Date.now().toString(36)}`,
-                type: 'source',
-                title: 'New Evidence Source',
-                accessed_at: now,
-                source_type: 'webpage',
-                markdownBody: '# New Source\n\n## Extract\n\nRecord excerpt...\n\n## Notes\n\nNotes...',
-              };
-              storage.saveSource(activeProjectId, newSource).then(async () => {
-                const updated = await storage.getProject(activeProjectId);
-                setProjectData(updated);
-                openTab('source', newSource.id, newSource.title);
-              });
-            }}
-            onCreateNoteModal={() => {
-              if (!activeProjectId) return;
-              const now = new Date().toISOString();
-              const newNote: Note = {
-                id: `note-${Date.now().toString(36)}`,
-                type: 'note',
-                title: 'Investigation Note',
-                tags: [],
-                created_at: now,
-                updated_at: now,
-                markdownBody: '# Investigation Note\n\nRecord observations...',
-              };
-              storage.saveNote(activeProjectId, newNote).then(async () => {
-                const updated = await storage.getProject(activeProjectId);
-                setProjectData(updated);
-                openTab('note', newNote.id, newNote.title);
-              });
-            }}
+            onCreateSourceModal={createSource}
+            onCreateNoteModal={createNote}
             onExportZip={handleExportZip}
             onImportZip={() => handleImportInvestigation(isElectron && isMac ? 'any' : 'zip')}
             onImportData={() => setImportDataOpen(true)}
@@ -1869,13 +1970,21 @@ export function App() {
               {activeTab.type === 'overview' && (
                 <ProjectOverview
                   projectData={projectData}
-                  onSaveProject={(p) => storage.saveProject(p)}
+                  onSaveProject={async (p) => {
+                    await storage.saveProject(p);
+                    markSaved();
+                  }}
                   onOpenGraph={() => openTab('graph', undefined, 'Interactive Graph')}
                   onCreateEntity={() => setEntityModalOpen(true)}
                   onCreateRelationship={() => setRelModalOpen(true)}
                   onExportZip={handleExportZip}
                   onRebuildIndex={handleRebuildIndex}
                   onImportData={() => setImportDataOpen(true)}
+                  onExportReport={() => setReportOpen(true)}
+                  onOpenHistory={storage.isDesktop() ? () => setHistoryOpen(true) : undefined}
+                  onExtractText={() => setExtractOpen(true)}
+                  onExportGraph={() => setExportGraphOpen(true)}
+                  onLockCase={storage.isDesktop() && projectData ? () => setVaultDialog({ mode: 'lock', id: projectData.project.id, name: projectData.project.name }) : undefined}
                   onOpenEntity={(id) => {
                     const e = projectData.entities.find((ent) => ent.id === id);
                     openTab('entity', id, e ? e.name : id);
@@ -1916,6 +2025,7 @@ export function App() {
                         selectEntity(id);
                         openTab('graph', undefined, 'Interactive Graph');
                       }}
+                      onMerge={(id) => setMergeEntityId(id)}
                       onDirtyChange={(dirty) => setTabDirty(activeTab.id, dirty)}
                     />
                   );
@@ -1968,6 +2078,7 @@ export function App() {
                   return (
                     <SourceEditor
                       source={src}
+                      projectId={activeProjectId}
                       projectData={projectData}
                       onSave={handleSaveSource}
                       onDelete={handleDeleteSource}
@@ -2011,6 +2122,34 @@ export function App() {
                 })()
               )}
 
+              {activeTab.type === 'records' && projectData && (
+                <RecordsView
+                  projectData={projectData}
+                  onOpenEntity={(id, name) => openTab('entity', id, name)}
+                  onCreateEntity={() => setEntityModalOpen(true)}
+                  onSaveEntities={handleSaveEntities}
+                  onDeleteEntities={handleDeleteEntities}
+                  onMerge={(id, others) => {
+                    setMergePreselect(others);
+                    setMergeEntityId(id);
+                  }}
+                />
+              )}
+
+              {activeTab.type === 'timeline' && projectData && (
+                <TimelineView
+                  projectData={projectData}
+                  onOpenRelationship={(id) => {
+                    const r = projectData.relationships.find((rel) => rel.id === id);
+                    openTab('relationship', id, r ? `Rel: ${r.type}` : id);
+                  }}
+                  onOpenSource={(id) => {
+                    const src = projectData.sources.find((x) => x.id === id);
+                    openTab('source', id, src ? src.title : id);
+                  }}
+                />
+              )}
+
               {activeTab.type === 'tools' && (
                 <ToolsView
                   projectData={projectData}
@@ -2024,6 +2163,7 @@ export function App() {
 
               {activeTab.type === 'search' && activeProjectId && (
                 <SearchView
+                  projectId={activeProjectId}
                   onSearch={(q) => storage.search(activeProjectId, q)}
                   onSelectResult={(res) => {
                     if (res.type === 'entity') {
@@ -2048,6 +2188,12 @@ export function App() {
       {/* Right Sidebar Context Inspector */}
       {projectData && (
         <RightSidebar
+          quickActions={[
+            { label: 'New entity…', icon: <Plus className="w-3.5 h-3.5" />, run: () => setEntityModalOpen(true) },
+            { label: 'Find entities in pasted text…', icon: <ScanText className="w-3.5 h-3.5" />, run: () => setExtractOpen(true), hint: 'Emails, domains, phones, handles from an article or chat' },
+            { label: 'Import tool output…', icon: <FileInput className="w-3.5 h-3.5" />, run: () => setImportDataOpen(true) },
+            { label: 'New note', icon: <StickyNote className="w-3.5 h-3.5" />, run: createNote },
+          ]}
           isOpen={rightSidebarOpen}
           projectData={projectData}
           selectedEntityId={selectedEntityId}
@@ -2082,6 +2228,34 @@ export function App() {
         />
       )}
       </div>
+
+      {projectData && activeProjectId && (
+        <Scratchpad
+          projectId={activeProjectId}
+          notes={projectData.notes}
+          onSave={async (text) => {
+            const now = new Date().toISOString();
+            const existing = projectData.notes.find((n) => n.id === SCRATCH_ID);
+            const note: Note = existing
+              ? { ...existing, markdownBody: text, updated_at: now }
+              : { id: SCRATCH_ID, type: 'note', title: 'Scratchpad', tags: ['scratchpad'], created_at: now, updated_at: now, markdownBody: text };
+            await storage.saveNote(activeProjectId, note);
+            // Keep the loaded case in step without a full reload (the editor is mid-typing).
+            setProjectData((prev) => (prev ? { ...prev, notes: [...prev.notes.filter((n) => n.id !== SCRATCH_ID), note] } : prev));
+            markSaved();
+          }}
+          onExtract={(text) => {
+            const batch = extractIndicators(text, { fileName: 'scratchpad' });
+            if (batch.entities.length === 0) {
+              showToast('No emails, links, domains, phones or handles found in the scratchpad');
+              return;
+            }
+            setImportBatch(batch);
+            setImportDataOpen(true);
+          }}
+          onOpenAsNote={() => openTab('note', SCRATCH_ID, 'Scratchpad')}
+        />
+      )}
 
       <StatusBar
         projectData={projectData}
@@ -2145,14 +2319,147 @@ export function App() {
         onClose={() => setCommandPaletteOpen(false)}
         projectData={projectData}
         onOpenTab={openTab}
-        onCreateEntity={() => setEntityModalOpen(true)}
-        onCreateRelationship={() => setRelModalOpen(true)}
+        commands={buildPaletteCommands({
+          hasProject: !!projectData,
+          isDesktop: isElectron,
+          mod: isMac ? '⌘' : 'Ctrl+',
+          hasSelectedEntity: !!selectedEntityId && !!projectData?.entities.some((e) => e.id === selectedEntityId),
+          autosave: prefs.autosave,
+          projects: projects.map((p) => ({ id: p.id, name: p.name, active: p.id === activeProjectId })),
+          go: (t) => openTab(t, undefined, { graph: 'Interactive Graph', overview: 'Project Overview', search: 'Full-Text Search', timeline: 'Timeline', records: 'Records', tools: 'Tools' }[t]),
+          newEntity: () => setEntityModalOpen(true),
+          newRelationship: () => setRelModalOpen(true),
+          newSource: createSource,
+          newNote: createNote,
+          newProject: () => setProjectModalOpen(true),
+          importCase: () => handleImportInvestigation(importOneDialog ? 'any' : 'zip'),
+          mergeSelected: () => selectedEntityId && setMergeEntityId(selectedEntityId),
+          importData: () => setImportDataOpen(true),
+          extractText: () => setExtractOpen(true),
+          exportGraph: () => setExportGraphOpen(true),
+          report: () => setReportOpen(true),
+          exportZip: handleExportZip,
+          history: () => setHistoryOpen(true),
+          lockCase: () => projectData && activeProjectId && setVaultDialog({ mode: 'lock', id: activeProjectId, name: projectData.project.name }),
+          rebuildIndex: handleRebuildIndex,
+          revealFolder: () => handleOpenInExplorer(activeProjectId),
+          settings: () => setSettingsModalOpen(true),
+          shortcuts: () => setShortcutsModalOpen(true),
+          tour: () => setTourOpen(true),
+          toggleLeft: () => setLeftSidebarOpen((v) => !v),
+          toggleRight: () => setRightSidebarOpen((v) => !v),
+          setTheme: setThemeMode,
+          toggleAutosave: () => setPreferences({ autosave: !prefs.autosave }),
+          switchProject: handleSelectProject,
+        })}
       />
 
       <ShortcutsModal
         isOpen={shortcutsModalOpen}
         onClose={() => setShortcutsModalOpen(false)}
       />
+
+      <MergeEntitiesModal
+        isOpen={mergeEntityId !== null}
+        onClose={() => {
+          setMergeEntityId(null);
+          setMergePreselect([]);
+        }}
+        preselect={mergePreselect}
+        projectData={projectData}
+        entityId={mergeEntityId}
+        onConfirm={async (keepId, mergeIds) => {
+          if (!activeProjectId || !projectData) return;
+          const plan = planMerge(projectData, keepId, mergeIds);
+          // A merge rewrites many files; keep a way back.
+          await window.electronAPI?.history?.snapshot(activeProjectId, `Before merging into “${plan.keep.name}”`).catch(() => null);
+          await applyMerge(storage, activeProjectId, plan);
+          plan.merged.forEach((m) => closeTab(`tab-entity-${m.id}`));
+          setProjectData(await storage.getProject(activeProjectId));
+          selectEntity(keepId);
+          showToast(`Merged ${plan.merged.length + 1} entities into “${plan.keep.name}”`);
+        }}
+      />
+
+      <HistoryModal
+        isOpen={historyOpen}
+        onClose={() => setHistoryOpen(false)}
+        projectId={activeProjectId}
+        projectName={projectData?.project.name}
+        onRestored={async (message, openProjectId) => {
+          await loadWorkspaceData();
+          const id = openProjectId ?? activeProjectId;
+          if (id) {
+            const data = await storage.getProject(id);
+            setProjectData(data);
+            const layout = await storage.getGraphLayout(id);
+            setGraphPositions(layout.positions || {});
+            if (openProjectId) setActiveProjectId(openProjectId);
+            // Open editors may show records that no longer exist.
+            setTabs([
+              { id: 'tab-graph', type: 'graph', title: 'Interactive Graph' },
+              { id: 'tab-overview', type: 'overview', title: 'Project Overview' },
+            ]);
+            setActiveTabId('tab-overview');
+          }
+          showToast(message);
+        }}
+      />
+
+      <WelcomeTour isOpen={tourOpen} onClose={() => setTourOpen(false)} />
+
+      <PassphraseModal
+        isOpen={vaultDialog !== null}
+        mode={vaultDialog?.mode ?? 'unlock'}
+        caseName={vaultDialog?.name ?? ''}
+        onClose={() => setVaultDialog(null)}
+        onSubmit={async (pass) => {
+          if (!vaultDialog) return null;
+          const { mode, id, name } = vaultDialog;
+          try {
+            if (mode === 'lock') {
+              await storage.lockProject?.(id, pass);
+              setVaultDialog(null);
+              // Leave the locked case: open another one, or none.
+              setProjectData(null);
+              setActiveProjectId(undefined);
+              setTabs([]);
+              await loadWorkspaceData();
+              showToast(`“${name}” is encrypted and locked`);
+            } else {
+              const r = await storage.unlockProject?.(id, pass);
+              if (r?.wrong) return 'Wrong passphrase.';
+              setVaultDialog(null);
+              await loadWorkspaceData();
+              setProjectData(await storage.getProject(id));
+              setActiveProjectId(id);
+              if (workspace) await storage.saveWorkspace({ ...workspace, activeProjectId: id });
+              setTabs([
+                { id: 'tab-graph', type: 'graph', title: 'Interactive Graph' },
+                { id: 'tab-overview', type: 'overview', title: 'Project Overview' },
+              ]);
+              setActiveTabId('tab-overview');
+              showToast(`“${name}” unlocked`);
+            }
+            return null;
+          } catch (e: any) {
+            return e?.message || 'Something went wrong';
+          }
+        }}
+      />
+
+      <ExportGraphModal isOpen={exportGraphOpen} onClose={() => setExportGraphOpen(false)} projectData={projectData} onDone={showToast} />
+
+      <ExtractTextModal
+        isOpen={extractOpen}
+        onClose={() => setExtractOpen(false)}
+        onExtracted={(batch) => {
+          setImportBatch(batch);
+          setImportDataOpen(true);
+        }}
+      />
+
+      <ReportModal isOpen={reportOpen} onClose={() => setReportOpen(false)} projectData={projectData} onDone={showToast} />
 
       <WhatsNewModal release={whatsNew} onClose={() => setWhatsNew(null)} />
 
@@ -2178,6 +2485,10 @@ export function App() {
         onExportZip={handleExportZip}
         onRebuildIndex={handleRebuildIndex}
         onOpenShortcuts={() => setShortcutsModalOpen(true)}
+        onOpenHistory={() => {
+          setSettingsModalOpen(false);
+          setHistoryOpen(true);
+        }}
         projectsVersion={projects}
         loadStorageUsage={() => storage.getStorageUsage()}
         onDeleteProject={handleDeleteProject}

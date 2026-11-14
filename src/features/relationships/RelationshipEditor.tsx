@@ -1,9 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { useAutosave } from '@/hooks/useAutosave';
+import { SaveBadge } from '@/components/common/SaveBadge';
 import {
   ProjectData,
   Relationship,
   RelationshipStatus,
   RELATIONSHIP_STATUSES,
+  parsePartialDate,
   EVIDENCE_CLASSES,
   evidenceClassOf,
 } from '@/types';
@@ -27,7 +30,7 @@ import { Select } from '@/components/common/Select';
 interface RelationshipEditorProps {
   relationship: Relationship;
   projectData: ProjectData;
-  onSave: (rel: Relationship) => void;
+  onSave: (rel: Relationship, opts?: { auto?: boolean }) => void;
   onDelete: (relId: string) => void;
   onOpenEntity: (entityId: string) => void;
   onOpenSource: (sourceId: string) => void;
@@ -66,7 +69,14 @@ export const RelationshipEditor: React.FC<RelationshipEditorProps> = ({
     relationship.source_entity === relationship.target_entity
   );
 
+  const dirtyRef = useRef(false);
+  dirtyRef.current = isDirty;
+  const autoRef = useRef(false);
+  const draftIdRef = useRef(relationship.id);
   useEffect(() => {
+    // A save that completes while you keep typing must not overwrite the newer text.
+    if (dirtyRef.current && draftIdRef.current === relationship.id) return;
+    draftIdRef.current = relationship.id;
     setDraft({ ...relationship });
     setIsDirty(false);
   }, [relationship]);
@@ -78,9 +88,17 @@ export const RelationshipEditor: React.FC<RelationshipEditorProps> = ({
 
   const handleSave = () => {
     if (!draft.source_entity || !draft.target_entity || !draft.type.trim()) return;
-    onSave(draft);
+    // An invalid date would be dropped on the next load, so it must be fixed first.
+    if ((draft.valid_from && !parsePartialDate(draft.valid_from)) || (draft.valid_to && !parsePartialDate(draft.valid_to))) return;
+    onSave(draft, { auto: autoRef.current });
     setIsDirty(false);
   };
+
+  useAutosave(isDirty, draft, () => {
+    autoRef.current = true;
+    handleSave();
+    autoRef.current = false;
+  });
 
   const toggleEvidenceSource = (sourceId: string) => {
     const exists = draft.evidence.includes(sourceId);
@@ -106,11 +124,7 @@ export const RelationshipEditor: React.FC<RelationshipEditorProps> = ({
             <div className="flex items-center space-x-2">
               <span className="font-mono text-[10.5px] text-zinc-600">{draft.id}</span>
               <StatusBadge status={draft.status} size="sm" />
-              {isDirty && (
-                <span className="text-[10.5px] text-amber-400">
-                  Unsaved changes
-                </span>
-              )}
+              <SaveBadge dirty={isDirty} />
             </div>
             <h1 className="text-[13.5px] font-semibold text-zinc-50 leading-tight">
               Relationship: <span className="text-purple-400">{draft.type}</span>
@@ -268,6 +282,31 @@ export const RelationshipEditor: React.FC<RelationshipEditorProps> = ({
                 </div>
               )}
             </div>
+          </div>
+        </div>
+
+        {/* When the relationship held */}
+        <div className="border-t border-[var(--t-border)] pt-3 space-y-2">
+          <h2 className="t-label !text-zinc-400">Time period (optional)</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {(['valid_from', 'valid_to'] as const).map((k) => {
+              const v = draft[k] || '';
+              const bad = v !== '' && !parsePartialDate(v);
+              return (
+                <div key={k}>
+                  <label className="block text-[11px] text-zinc-500 mb-1">{k === 'valid_from' ? 'From' : 'Until (leave empty if ongoing)'}</label>
+                  <input
+                    type="text"
+                    value={v}
+                    onChange={(e) => updateDraft({ [k]: e.target.value.trim() || undefined } as Partial<Relationship>)}
+                    placeholder="YYYY, YYYY-MM or YYYY-MM-DD"
+                    className={`t-input font-mono ${bad ? '!border-rose-500/70' : ''}`}
+                    spellCheck={false}
+                  />
+                  {bad && <p className="text-[11px] text-rose-400 mt-1">Use YYYY, YYYY-MM or YYYY-MM-DD.</p>}
+                </div>
+              );
+            })}
           </div>
         </div>
 

@@ -60,15 +60,15 @@ export function tokenizeShell(src: string): Token[] {
 }
 
 const COLOR: Record<TokenKind, string> = {
-  key: 'text-[#7fb7b0]',
-  string: 'text-[#d9b98a]',
-  number: 'text-[#b5a2d4]',
-  literal: 'text-[#d98f8f]',
+  key: 'text-[var(--t-syn-key)]',
+  string: 'text-[var(--t-syn-string)]',
+  number: 'text-[var(--t-syn-number)]',
+  literal: 'text-[var(--t-syn-literal)]',
   punct: 'text-zinc-500',
-  command: 'text-[#8fb5e6] font-semibold',
-  flag: 'text-[#7fb7b0]',
-  env: 'text-[#b5a2d4]',
-  path: 'text-[#d9b98a]',
+  command: 'text-[var(--t-syn-command)] font-semibold',
+  flag: 'text-[var(--t-syn-key)]',
+  env: 'text-[var(--t-syn-number)]',
+  path: 'text-[var(--t-syn-string)]',
   plain: 'text-zinc-300',
 };
 
@@ -90,7 +90,7 @@ export const CodeBlock: React.FC<{ label?: string; text: string; lang: 'json' | 
           {copied ? 'Copied' : 'Copy'}
         </button>
       </div>
-      <pre className="rounded-[3px] border border-[var(--t-border)] bg-[#0c0c0e] px-2.5 py-2 font-mono text-[11px] overflow-x-auto select-text whitespace-pre">
+      <pre className="rounded-[3px] border border-[var(--t-border)] bg-[var(--t-code-bg)] px-2.5 py-2 font-mono text-[11px] overflow-x-auto select-text whitespace-pre">
         <code>
           {tokens.map((t, i) => (
             <span key={i} className={COLOR[t.kind]}>

@@ -1,28 +1,46 @@
 <!doctype html>
-<html lang="en" class="dark">
+<html lang="en" class="dark" data-theme="dark">
 
 <head>
   <meta charset="UTF-8" />
   <link rel="icon" type="image/png" href="/icon.png" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Trace</title>
+  <script>
+    // Apply the saved appearance before anything paints (mirrors src/services/theme.ts).
+    (function () {
+      var mode = 'system';
+      try { mode = localStorage.getItem('trace_theme') || 'system'; } catch (e) {}
+      var dark = mode === 'dark' || (mode !== 'light' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+      var r = document.documentElement;
+      r.setAttribute('data-theme', dark ? 'dark' : 'light');
+      r.className = dark ? 'dark' : '';
+      r.style.colorScheme = dark ? 'dark' : 'light';
+    })();
+  </script>
+  <style>
+    /* Splash colours for both themes (the app stylesheet may not be loaded yet). */
+    :root { --s-bg: #111113; --s-track: #26272a; --s-title: #d4d5d8; --s-dim: #6c6f75; --s-build: #4f5257; --s-accent: #47908a; }
+    :root[data-theme='light'] { --s-bg: #f6f6f7; --s-track: #d9dadd; --s-title: #2b2d31; --s-dim: #70737a; --s-build: #8a8d94; --s-accent: #2f7d77; }
+    html, body { background: var(--s-bg); }
+  </style>
 </head>
 
-<body style="margin: 0; padding: 0; overflow: hidden; background: #111113;">
+<body style="margin: 0; padding: 0; overflow: hidden; background: var(--s-bg);">
   <div id="root">
     <!-- Static splash shown until React mounts. Must stay identical to the
          startup splash in App.tsx so the hand-over is invisible. -->
-    <div style="position: fixed; inset: 0; z-index: 100; background: #111113; display: flex; align-items: center; justify-content: center; user-select: none; -webkit-app-region: drag;">
+    <div style="position: fixed; inset: 0; z-index: 100; background: var(--s-bg); display: flex; align-items: center; justify-content: center; user-select: none; -webkit-app-region: drag;">
       <div style="width: 256px; display: flex; flex-direction: column; gap: 8px;">
         <div style="display: flex; align-items: baseline; justify-content: space-between;">
-          <span style="font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', system-ui, sans-serif; font-size: 12px; font-weight: 600; letter-spacing: 0.08em; color: #e4e4e7;">TRACE</span>
-          <span style="font-family: 'JetBrains Mono', 'SF Mono', ui-monospace, Menlo, monospace; font-size: 10px; color: #71717a;">%TRACE_APP_VERSION%</span>
+          <span style="font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', system-ui, sans-serif; font-size: 12px; font-weight: 600; letter-spacing: 0.08em; color: var(--s-title);">TRACE</span>
+          <span style="font-family: 'JetBrains Mono', 'SF Mono', ui-monospace, Menlo, monospace; font-size: 10px; color: var(--s-dim);">%TRACE_APP_VERSION%</span>
         </div>
-        <div style="height: 1px; width: 100%; background: #27272a; overflow: hidden;">
-          <div style="height: 100%; width: 15%; background: #47908a;"></div>
+        <div style="height: 1px; width: 100%; background: var(--s-track); overflow: hidden;">
+          <div style="height: 100%; width: 15%; background: var(--s-accent);"></div>
         </div>
         <!-- Desktop app only (shown by the script below), same as the React splash. -->
-        <div id="trace-build" style="display: none; font-family: 'JetBrains Mono', 'SF Mono', ui-monospace, Menlo, monospace; font-size: 10px; color: #52525b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">build %TRACE_BUILD_ID%</div>
+        <div id="trace-build" style="display: none; font-family: 'JetBrains Mono', 'SF Mono', ui-monospace, Menlo, monospace; font-size: 10px; color: var(--s-build); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">build %TRACE_BUILD_ID%</div>
         <script>
           if (window.electronAPI && window.electronAPI.isDesktop) document.getElementById('trace-build').style.display = 'block';
         </script>

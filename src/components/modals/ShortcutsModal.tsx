@@ -69,7 +69,7 @@ export const ShortcutsModal: React.FC<ShortcutsModalProps> = ({ isOpen, onClose 
   ];
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/55">
+    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-[var(--t-overlay)]">
       <div className="bg-[var(--t-raised)] border border-obsidian-border rounded w-full max-w-2xl shadow-popover flex flex-col max-h-[85vh] overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-obsidian-border bg-[var(--t-panel)]/80">

@@ -220,7 +220,7 @@ export const Select: React.FC<SelectProps> = ({ value, onChange, children, class
                 onClick={() => choose(o)}
                 className={`flex items-center gap-2 h-[24px] px-2.5 text-[12px] whitespace-nowrap ${
                   o.disabled ? 'text-zinc-600 cursor-not-allowed' : 'cursor-pointer'
-                } ${i === active && !o.disabled ? 'bg-[var(--t-accent)] text-white' : 'text-[var(--t-text)]'}`}
+                } ${i === active && !o.disabled ? 'bg-[var(--t-accent)] text-on-accent' : 'text-[var(--t-text)]'}`}
               >
                 <span className="w-3 shrink-0">{o.value === current && <Check className="w-3 h-3" />}</span>
                 <span className="truncate">{o.label}</span>

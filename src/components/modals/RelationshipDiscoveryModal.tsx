@@ -163,7 +163,7 @@ export const RelationshipDiscoveryModal: React.FC<RelationshipDiscoveryModalProp
   ];
 
   return (
-    <div className="fixed inset-0 z-[70] bg-black/55 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[70] bg-[var(--t-overlay)] flex items-center justify-center p-4">
       <div className="bg-[var(--t-raised)] border border-obsidian-border rounded max-w-2xl w-full shadow-popover flex flex-col max-h-[85vh] overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-obsidian-border bg-[var(--t-panel)]">
@@ -272,7 +272,7 @@ export const RelationshipDiscoveryModal: React.FC<RelationshipDiscoveryModalProp
                       <div
                         className={`w-4 h-4 rounded flex items-center justify-center shrink-0 transition-colors ${
                           isChecked
-                            ? 'bg-purple-600 text-white'
+                            ? 'bg-purple-600 text-on-accent'
                             : 'border border-obsidian-border bg-[var(--t-bg)]'
                         }`}
                       >
