@@ -40,9 +40,13 @@ Twitter : @palenath
 Github : https://github.com/megadose/holehe
 `;
 
+// Real output of helix-osint 4.2.0 installed from PyPI (`--json --no-browser --wmn --sherlock --maigret -u torvalds`,
+// 15 Nov 2026), shortened to 4 of its 137 accounts. The counts are the run's own.
+const HELIX_OUT = String.raw`{"schema": "helix.cli.v1", "tool": {"name": "Helix", "version": "4.2.0"}, "username": "torvalds", "email": "", "purpose": "not stated", "summary": {"attempted": 7656, "answered": 6916, "found": 137, "unanswered": 740, "unanswered_by_reason": {"bot-check page": 309, "timeout": 195, "blocked or failed (HTTP 403)": 135, "connection error": 13, "verifier: false-positive pattern": 13, "blocked or failed (HTTP 429)": 11, "control probe: site finds impossible usernames": 11, "blocked or failed (HTTP 502)": 10, "blocked or failed (HTTP 401)": 9, "invalid HTTPS certificate": 7, "proxy refused the host (HTTP 502 from the proxy)": 4, "control probe: impossible username got no clear answer": 4, "control probe: hit did not reproduce": 4, "other error": 4, "blocked or failed (HTTP 508)": 2, "blocked or failed (HTTP 503)": 2, "blocked or failed (HTTP 500)": 2, "blocked or failed (HTTP 999)": 1, "blocked or failed (HTTP 521)": 1, "blocked or failed (HTTP 504)": 1, "blocked or failed (HTTP 520)": 1, "blocked or failed (HTTP 525)": 1}, "left_out": 642}, "accounts": [{"platform": "Gitea", "url": "https://gitea.com/torvalds", "category": "dev", "source": "wmn", "confidence": "LOW", "evidence": ["same username"], "kind": "username"}, {"platform": "GitHub", "url": "https://github.com/torvalds", "category": "dev", "source": "builtin", "confidence": "LOW", "evidence": ["same username"], "kind": "username"}, {"platform": "Keybase", "url": "https://keybase.io/torvalds", "category": "other", "source": "builtin", "confidence": "LOW", "evidence": ["same username"], "kind": "username"}, {"platform": "lemmy.ml", "url": "https://lemmy.ml/u/torvalds", "category": "forum", "source": "maigret", "confidence": "LOW", "evidence": ["same username"], "kind": "username"}], "unconfirmed": []}`;
+
 describe('tool catalog', () => {
   it('has the marketplace tools with pip packages', () => {
-    expect(TOOL_CATALOG.map((t) => t.id)).toEqual(['sherlock', 'maigret', 'holehe', 'ignorant', 'dnsrecon', 'dnstwist']);
+    expect(TOOL_CATALOG.map((t) => t.id)).toEqual(['sherlock', 'maigret', 'helix', 'holehe', 'ignorant', 'dnsrecon', 'dnstwist']);
     expect(getToolSpec('rm')).toBeUndefined();
   });
 
@@ -311,5 +315,92 @@ describe('new catalog tools', () => {
     expect(b.entities.length).toBe(301);
     expect(b.unmapped.length).toBe(150);
     expect(b.warnings.some((w) => /300/.test(w))).toBe(true);
+  });
+});
+
+describe('helix', () => {
+  const spec = getToolSpec('helix')!;
+
+  it('runs unattended with JSON on stdout and the username last', () => {
+    expect(buildToolArgs(spec, 'torvalds')).toEqual(['--json', '--no-browser', '--wmn', '--sherlock', '--maigret', '-u', 'torvalds']);
+    expect(spec.pip).toEqual({ package: 'helix-osint', bin: 'helix-osint' });
+  });
+
+  it('turns the real JSON result into candidate accounts and keeps the unanswered count visible', () => {
+    const batch = toolOutputToBatch(spec, { value: 'torvalds', entity: { type: 'account', name: '@torvalds' } }, HELIX_OUT + '\n', new Date('2026-11-15T10:00:00Z'));
+    const real = JSON.parse(HELIX_OUT);
+    expect(batch.format).toBe('tool:helix');
+    expect(batch.entities).toHaveLength(real.accounts.length + 1);
+    expect(batch.entities[0]).toMatchObject({ key: 'input', type: 'account', name: '@torvalds' });
+    const first = real.accounts[0];
+    expect(batch.entities[1]).toMatchObject({
+      type: 'account',
+      name: `torvalds (${first.platform})`,
+      source_url: new URL(first.url).toString(),
+      tags: ['helix'],
+      attributes: { platform: first.platform, username: 'torvalds', helix_confidence: 'LOW' },
+    });
+    // A username match alone is a lead: every link of this run starts as Candidate.
+    expect(batch.relationships).toHaveLength(real.accounts.length);
+    expect(batch.relationships.every((r) => r.type === 'has_account' && r.status === 'candidate' && r.source === 'input')).toBe(true);
+    expect(batch.relationships[0].note).toMatch(/same username only/);
+    // Sites that did not answer are said, not passed over.
+    expect(batch.warnings.join(' ')).toContain(`${real.summary.unanswered} of ${real.summary.attempted} sites gave Helix no clear answer`);
+    expect(batch.unmapped).toHaveLength(real.unconfirmed.length);
+  });
+
+  it('goes through the normal import review', () => {
+    const project: ProjectData = {
+      project: { id: 'p', type: 'project', name: 'P', created_at: '', updated_at: '', markdownBody: '' },
+      entities: [{ id: 'acc-1', type: 'account', name: '@torvalds', aliases: [], created_at: '', updated_at: '', attributes: {}, tags: [], markdownBody: '' }],
+      relationships: [],
+      sources: [],
+      notes: [],
+    };
+    const plan = planImport(toolOutputToBatch(spec, { value: 'torvalds', entity: { type: 'account', name: '@torvalds' } }, HELIX_OUT), project);
+    expect(plan.entities[0]).toMatchObject({ decision: 'link-existing', duplicateOf: { id: 'acc-1' } });
+    const rec = buildImportRecords(plan, { existingIds: new Set(['acc-1']) });
+    expect(rec.relationships.every((r) => r.source_entity === 'acc-1' && r.status === 'candidate')).toBe(true);
+    expect(rec.entities.every((e) => e.tags.includes('helix') && e.tags.includes('imported'))).toBe(true);
+  });
+
+  it('keeps the grade and evidence as attributes and starts every link as Candidate, whatever the grade', () => {
+    // Not captured output: the real run above has no HIGH account, so rows are graded by hand here.
+    const real = JSON.parse(HELIX_OUT);
+    const graded = { ...real, accounts: [{ ...real.accounts[0], confidence: 'HIGH', evidence: ['same profile picture as GitLab'] }, { ...real.accounts[1], confidence: 'MEDIUM', evidence: ['linked from GitHub'] }, { ...real.accounts[2], confidence: 'nonsense' }] };
+    const batch = toolOutputToBatch(spec, { value: 'torvalds' }, JSON.stringify(graded));
+    expect(batch.relationships.map((r) => r.status)).toEqual(['candidate', 'candidate', 'candidate']);
+    expect(batch.relationships[0].note).toContain('same profile picture as GitLab');
+    expect(batch.entities[1].attributes).toMatchObject({ helix_confidence: 'HIGH', helix_evidence: 'same profile picture as GitLab' });
+    expect(batch.entities[3].attributes).toMatchObject({ helix_confidence: 'LOW' });
+  });
+
+  it('ignores progress text, bad addresses and email rows, and reports refusals and empty output', () => {
+    const noisy = `Scanning...\n${JSON.stringify({ schema: 'helix.cli.v1', summary: { attempted: 3, unanswered: 0 }, unconfirmed: [], accounts: [
+      { platform: 'Ok', url: 'https://ok.example/u/x', confidence: 'LOW' },
+      { platform: 'Ok', url: 'https://ok.example/u/again', confidence: 'LOW' },
+      { platform: 'Script', url: 'javascript:alert(1)', confidence: 'HIGH' },
+      { platform: 'Gravatar', url: 'https://gravatar.com/h', confidence: 'LOW', kind: 'email' },
+    ] })}\n`;
+    const batch = toolOutputToBatch(spec, { value: 'x' }, noisy);
+    expect(batch.entities.map((e) => e.name)).toEqual(['x', 'x (Ok)']);
+    expect(batch.unmapped).toHaveLength(2);
+
+    // A hit Helix could not confirm is kept as an unmapped record, never dropped and never an entity.
+    const unsure = toolOutputToBatch(spec, { value: 'x' }, JSON.stringify({ schema: 'helix.cli.v1', summary: {}, accounts: [], unconfirmed: [{ platform: 'Short', url: 'https://short.example/x' }] }));
+    expect(unsure.entities).toHaveLength(1);
+    expect(unsure.unmapped).toHaveLength(1);
+    expect(unsure.unmapped[0].reason).toMatch(/could not confirm/);
+
+    const refused = toolOutputToBatch(spec, { value: 'x' }, JSON.stringify({ schema: 'helix.cli.v1', error: 'the name is on the left-out list', exit_code: 3, accounts: [], unconfirmed: [] }));
+    expect(refused.entities).toHaveLength(1);
+    expect(refused.warnings[0]).toMatch(/left-out list/);
+
+    for (const out of ['', 'Traceback (most recent call last):', '{"schema":"other"}', '{"schema":"helix.cli.v1","accounts":[']) {
+      const b = toolOutputToBatch(spec, { value: 'x' }, out);
+      expect(b.entities).toHaveLength(1);
+      expect(b.warnings[0]).toMatch(/printed no result/);
+    }
+    expect(toolOutputToBatch(spec, { value: 'x' }, JSON.stringify({ schema: 'helix.cli.v1', summary: {}, accounts: [], unconfirmed: [] })).warnings[0]).toMatch(/no results/);
   });
 });

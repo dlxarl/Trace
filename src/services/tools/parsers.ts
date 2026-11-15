@@ -8,6 +8,8 @@
  *   maigret:        "[+] GitHubGist [GitHub]: https://gist.github.com/user"
  *                   followed by " ├─key: value" / " └─key: value" detail lines
  *   holehe 1.61:    "[+] twitter.com"   (only-used mode)
+ *   helix 4.2:      one JSON object on stdout (--json), schema "helix.cli.v1":
+ *                   { accounts: [{ platform, url, confidence, evidence, ... }], summary, unconfirmed }
  */
 import type { EntityType } from '@/types';
 import type { ImportBatch, ImportEntity } from '@/services/import/types';
@@ -223,8 +225,95 @@ function dnsTwistBatch(spec: ToolSpec, target: ToolTarget, stdout: string, obser
   return batch;
 }
 
+// Helix
+
+const MAX_HELIX_ACCOUNTS = 1000;
+
+/**
+ * Helix prints one JSON object (schema "helix.cli.v1"). Every account in it
+ * was re-checked live against made-up usernames, and carries a grade (HIGH,
+ * MEDIUM, LOW) for how strongly it is tied to the other accounts found. The
+ * grade and its evidence are kept as attributes; every link starts as
+ * "candidate", like the other tools' links.
+ */
+function helixBatch(spec: ToolSpec, target: ToolTarget, stdout: string, observed: string): ImportBatch {
+  const input: ImportEntity = { key: 'input', type: target.entity?.type ?? 'account', name: target.entity?.name ?? target.value, raw: { tool_input: target.value } };
+  const batch: ImportBatch = { format: `tool:${spec.id}`, tool: spec.name, fileName: `${spec.pip.bin} ${target.value}`, entities: [input], relationships: [], unmapped: [], warnings: [] };
+
+  let data: Record<string, unknown> | null = null;
+  for (const line of cleanLines(stdout)) {
+    if (!line.startsWith('{')) continue;
+    try {
+      const parsed: unknown = JSON.parse(line);
+      if (parsed && typeof parsed === 'object' && (parsed as Record<string, unknown>).schema === 'helix.cli.v1') data = parsed as Record<string, unknown>;
+    } catch {
+      /* not the result line */
+    }
+  }
+  if (!data) {
+    batch.warnings.push('Helix printed no result (the run may have been stopped early, or the installed version is older than 4.2).');
+    return batch;
+  }
+  if (typeof data.error === 'string') {
+    batch.warnings.push(`Helix did not scan "${target.value}": ${data.error}.`);
+    return batch;
+  }
+
+  const str = (v: unknown) => (typeof v === 'string' ? v.trim() : '');
+  const seen = new Set<string>();
+  let count = 0;
+  for (const row of Array.isArray(data.accounts) ? (data.accounts as Record<string, unknown>[]) : []) {
+    const site = str(row?.platform).slice(0, 120);
+    const url = httpUrl(str(row?.url));
+    if (!site || !url || str(row?.kind || 'username') !== 'username') {
+      batch.unmapped.push({ reason: 'not a username account with a web address', raw: row });
+      continue;
+    }
+    if (seen.has(site.toLowerCase())) continue;
+    seen.add(site.toLowerCase());
+    if (count >= MAX_HELIX_ACCOUNTS) {
+      batch.unmapped.push({ reason: `beyond the ${MAX_HELIX_ACCOUNTS} account limit`, raw: row });
+      continue;
+    }
+    const grade = ['HIGH', 'MEDIUM', 'LOW'].includes(str(row.confidence)) ? str(row.confidence) : 'LOW';
+    const evidence = (Array.isArray(row.evidence) ? row.evidence : []).filter((e): e is string => typeof e === 'string').map((e) => e.slice(0, 300)).slice(0, 10);
+    const key = `hit${count++}`;
+    const attributes: Record<string, unknown> = { platform: site, url, username: target.value, helix_confidence: grade };
+    if (str(row.category)) attributes.category = str(row.category).slice(0, 48);
+    if (str(row.source)) attributes.site_list = str(row.source).slice(0, 48);
+    if (evidence.length) attributes.helix_evidence = evidence.join('; ');
+    batch.entities.push({ key, type: 'account', name: `${target.value} (${site})`, aliases: [url], attributes, tags: [spec.id], source_url: url, observed_at: observed, raw: row });
+    batch.relationships.push({
+      key: `rel${count - 1}`,
+      source: 'input',
+      target: key,
+      type: 'has_account',
+      directed: true,
+      status: 'candidate',
+      source_url: url,
+      observed_at: observed,
+      note:
+        `Reported by ${spec.name} for "${target.value}" on ${site}; the account exists (re-checked against made-up usernames). ` +
+        `Helix grade ${grade}: ${grade === 'LOW' ? 'same username only, not shown to be the same person' : evidence.join('; ') || 'corroborated, see the attributes'}.`,
+      raw: row,
+    });
+  }
+  for (const row of Array.isArray(data.unconfirmed) ? (data.unconfirmed as unknown[]) : []) {
+    batch.unmapped.push({ reason: 'Helix could not confirm it (a made-up name of the same length was also found there)', raw: row });
+  }
+
+  const summary = (data.summary && typeof data.summary === 'object' ? data.summary : {}) as Record<string, unknown>;
+  const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
+  if (num(summary.unanswered) > 0) {
+    batch.warnings.push(`${num(summary.unanswered)} of ${num(summary.attempted)} sites gave Helix no clear answer (bot checks, timeouts, rate limits). An account there would not be listed.`);
+  }
+  if (count === 0) batch.warnings.push(`${spec.name} reported no results for "${target.value}".`);
+  return batch;
+}
+
 export function toolOutputToBatch(spec: ToolSpec, target: ToolTarget, stdout: string, ranAt = new Date()): ImportBatch {
   const observed = ranAt.toISOString();
+  if (spec.id === 'helix') return helixBatch(spec, target, stdout, observed);
   if (spec.id === 'dnsrecon') return dnsReconBatch(spec, target, stdout, observed);
   if (spec.id === 'dnstwist') return dnsTwistBatch(spec, target, stdout, observed);
   // Holehe and Ignorant print "[+] service" lines; Sherlock and Maigret print "[+] Site: URL".
