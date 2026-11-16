@@ -53,6 +53,7 @@ describe('routing tools', () => {
   it('uses --proxy for Sherlock and a socks5 address for Maigret (aiohttp-socks rejects socks5h)', () => {
     expect(proxyArgs('sherlock', TOR_PROXY_URL)).toEqual(['--proxy', 'socks5h://127.0.0.1:9050']);
     expect(proxyArgs('maigret', TOR_PROXY_URL)).toEqual(['--proxy', 'socks5://127.0.0.1:9050']);
+    expect(proxyArgs('helix', TOR_PROXY_URL)).toEqual(['--proxy', 'socks5://127.0.0.1:9050']);
   });
   it('uses environment variables for Holehe and Ignorant, including NO_PROXY cleared', () => {
     const env = proxyEnv('holehe', TOR_PROXY_URL);

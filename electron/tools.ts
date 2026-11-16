@@ -13,7 +13,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { routeTool, PROXY_EXTRAS, type NetworkSettings, DEFAULT_NETWORK } from '../src/services/tools/proxy';
-import { TOOL_CATALOG, buildToolArgs, getToolSpec, normaliseToolInput, type ToolSpec } from '../src/services/tools/catalog';
+import { TOOL_CATALOG, buildToolArgs, getToolSpec, normaliseToolInput, pipRequirement, type ToolSpec } from '../src/services/tools/catalog';
 import { hasPortablePython, installPortablePython, portablePythonExe } from './python';
 
 const MAX_OUTPUT = 5 * 1024 * 1024;
@@ -205,9 +205,9 @@ export class ToolManager {
       return { ok: false, error: 'Could not create a Python virtual environment.' };
     }
     const extras = PROXY_EXTRAS[spec.id] ?? [];
-    log(`pip install ${[spec.pip.package, ...extras].join(' ')}`, 'info');
+    log(`pip install ${[pipRequirement(spec), ...extras].join(' ')}`, 'info');
     const vpy = this.venvBin(spec, 'python');
-    const pip = await this.exec(vpy, ['-m', 'pip', 'install', '--no-input', spec.pip.package, ...extras], log, { timeoutMs: 600_000 });
+    const pip = await this.exec(vpy, ['-m', 'pip', 'install', '--no-input', pipRequirement(spec), ...extras], log, { timeoutMs: 600_000 });
     if (pip.code !== 0 || !fs.existsSync(this.venvBin(spec, spec.pip.bin))) {
       fs.rmSync(dir, { recursive: true, force: true });
       return { ok: false, error: pip.timedOut ? 'Installation timed out.' : 'pip install failed — see the log.' };

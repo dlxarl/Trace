@@ -10,7 +10,7 @@
  */
 import type { EntityType } from '@/types';
 
-export type ToolId = 'sherlock' | 'maigret' | 'holehe' | 'ignorant' | 'dnsrecon' | 'dnstwist';
+export type ToolId = 'sherlock' | 'maigret' | 'helix' | 'holehe' | 'ignorant' | 'dnsrecon' | 'dnstwist';
 export type ToolInputKind = 'username' | 'email' | 'phone' | 'domain';
 export type ToolCategory = 'Username' | 'Email' | 'Phone' | 'Domain';
 
@@ -23,8 +23,8 @@ export interface ToolSpec {
   category: ToolCategory;
   homepage: string;
   license: string;
-  /** PyPI package and console script it installs. */
-  pip: { package: string; bin: string };
+  /** PyPI package and console script it installs, and the exact version when it is pinned. */
+  pip: { package: string; bin: string; version?: string };
   input: {
     kind: ToolInputKind;
     label: string;
@@ -67,6 +67,21 @@ export const TOOL_CATALOG: ToolSpec[] = [
     pip: { package: 'maigret', bin: 'maigret' },
     input: { kind: 'username', label: 'Username', placeholder: 'e.g. johndoe', entityTypes: ['account', 'person'] },
     durationHint: '2–5 min',
+    timeoutSec: 900,
+  },
+  {
+    id: 'helix',
+    name: 'Helix',
+    tagline: 'Username on about 7,700 sites, every hit re-checked live',
+    description:
+      'Checks the username against the Sherlock, WhatsMyName and Maigret site lists and re-checks every hit against made-up usernames before reporting it, so catch-all pages and login walls are dropped. Each account keeps, as an attribute, the grade Helix gives it (HIGH, MEDIUM or LOW) for how strongly it is tied to the other accounts found. Sites that gave no clear answer are counted and reported, never treated as "no account".',
+    image: 'https://avatars.githubusercontent.com/u/177346026?s=60&v=4',
+    category: 'Username',
+    homepage: 'https://github.com/thalha-a9/helix',
+    license: 'MIT',
+    pip: { package: 'helix-osint', bin: 'helix-osint', version: '4.3.0' },
+    input: { kind: 'username', label: 'Username', placeholder: 'e.g. johndoe', entityTypes: ['account', 'person'] },
+    durationHint: '3-6 min',
     timeoutSec: 900,
   },
   {
@@ -162,12 +177,20 @@ export function normaliseToolInput(kind: ToolInputKind, raw: string): { ok: true
 }
 
 /** Exact argv (after the executable) for a validated input. */
+/** What pip installs: `package==version` when the version is pinned, else the package. */
+export function pipRequirement(spec: ToolSpec): string {
+  return spec.pip.version ? `${spec.pip.package}==${spec.pip.version}` : spec.pip.package;
+}
+
 export function buildToolArgs(spec: ToolSpec, value: string): string[] {
   switch (spec.id) {
     case 'sherlock':
       return ['--print-found', '--no-color', '--timeout', '15', value];
     case 'maigret':
       return ['--no-color', '--no-progressbar', '--timeout', '20', '--top-sites', '500', value];
+    case 'helix':
+      // --json: one JSON object on stdout, progress on stderr, no browser, no prompts.
+      return ['--json', '--no-browser', '--wmn', '--sherlock', '--maigret', '-u', value];
     case 'holehe':
       return ['--only-used', '--no-color', '--no-clear', '-NP', '-T', '10', value];
     case 'ignorant': {

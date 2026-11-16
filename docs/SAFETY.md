@@ -40,7 +40,7 @@ Removing a case *permanently* also removes its history and backups. “Keep file
 
 | Traffic | Routed? |
 | :--- | :--- |
-| Sherlock, Maigret | Yes (`--proxy`) |
+| Sherlock, Maigret, Helix | Yes (`--proxy`) |
 | Holehe, Ignorant | Yes (`ALL_PROXY` / `HTTP(S)_PROXY`; the SOCKS helper package is installed with them or added on first proxied run) |
 | DNSRecon, dnstwist | **No**: they send raw DNS queries. While a proxy is on they are blocked, unless you allow direct runs |
 | Page capture (screenshot / PDF / MHTML) | Yes; WebRTC address leaks are disabled |

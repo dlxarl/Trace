@@ -81,6 +81,7 @@ export type ToolRouting = 'flag' | 'env' | 'none';
 const ROUTING: Record<ToolId, ToolRouting> = {
   sherlock: 'flag',
   maigret: 'flag',
+  helix: 'flag',
   holehe: 'env',
   ignorant: 'env',
   dnsrecon: 'none',
@@ -91,14 +92,15 @@ export const toolRouting = (id: ToolId): ToolRouting => ROUTING[id] ?? 'none';
 /** Extra packages a tool needs to speak SOCKS. */
 export const PROXY_EXTRAS: Partial<Record<ToolId, string[]>> = {
   sherlock: ['PySocks'],
+  helix: ['aiohttp-socks'],
   holehe: ['socksio'],
   ignorant: ['socksio'],
 };
 
-/** Command-line flags that route a tool's traffic. aiohttp-socks (Maigret) rejects "socks5h". */
+/** Command-line flags that route a tool's traffic. aiohttp-socks (Maigret, Helix) rejects "socks5h". */
 export function proxyArgs(id: ToolId, url: string): string[] {
   if (toolRouting(id) !== 'flag') return [];
-  return ['--proxy', id === 'maigret' ? url.replace(/^socks5h:/, 'socks5:') : url];
+  return ['--proxy', id === 'maigret' || id === 'helix' ? url.replace(/^socks5h:/, 'socks5:') : url];
 }
 
 export function proxyEnv(id: ToolId, url: string): Record<string, string> {
