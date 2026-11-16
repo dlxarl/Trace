@@ -79,7 +79,7 @@ export const TOOL_CATALOG: ToolSpec[] = [
     category: 'Username',
     homepage: 'https://github.com/thalha-a9/helix',
     license: 'MIT',
-    pip: { package: 'helix-osint', bin: 'helix-osint', version: '4.2.0' },
+    pip: { package: 'helix-osint', bin: 'helix-osint', version: '4.3.0' },
     input: { kind: 'username', label: 'Username', placeholder: 'e.g. johndoe', entityTypes: ['account', 'person'] },
     durationHint: '3-6 min',
     timeoutSec: 900,

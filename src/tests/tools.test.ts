@@ -40,9 +40,9 @@ Twitter : @palenath
 Github : https://github.com/megadose/holehe
 `;
 
-// Real output of helix-osint 4.2.0 installed from PyPI (`--json --no-browser --wmn --sherlock --maigret -u torvalds`,
-// 15 Nov 2026), shortened to 4 of its 137 accounts. The counts are the run's own.
-const HELIX_OUT = String.raw`{"schema": "helix.cli.v1", "tool": {"name": "Helix", "version": "4.2.0"}, "username": "torvalds", "email": "", "purpose": "not stated", "summary": {"attempted": 7656, "answered": 6916, "found": 137, "unanswered": 740, "unanswered_by_reason": {"bot-check page": 309, "timeout": 195, "blocked or failed (HTTP 403)": 135, "connection error": 13, "verifier: false-positive pattern": 13, "blocked or failed (HTTP 429)": 11, "control probe: site finds impossible usernames": 11, "blocked or failed (HTTP 502)": 10, "blocked or failed (HTTP 401)": 9, "invalid HTTPS certificate": 7, "proxy refused the host (HTTP 502 from the proxy)": 4, "control probe: impossible username got no clear answer": 4, "control probe: hit did not reproduce": 4, "other error": 4, "blocked or failed (HTTP 508)": 2, "blocked or failed (HTTP 503)": 2, "blocked or failed (HTTP 500)": 2, "blocked or failed (HTTP 999)": 1, "blocked or failed (HTTP 521)": 1, "blocked or failed (HTTP 504)": 1, "blocked or failed (HTTP 520)": 1, "blocked or failed (HTTP 525)": 1}, "left_out": 642}, "accounts": [{"platform": "Gitea", "url": "https://gitea.com/torvalds", "category": "dev", "source": "wmn", "confidence": "LOW", "evidence": ["same username"], "kind": "username"}, {"platform": "GitHub", "url": "https://github.com/torvalds", "category": "dev", "source": "builtin", "confidence": "LOW", "evidence": ["same username"], "kind": "username"}, {"platform": "Keybase", "url": "https://keybase.io/torvalds", "category": "other", "source": "builtin", "confidence": "LOW", "evidence": ["same username"], "kind": "username"}, {"platform": "lemmy.ml", "url": "https://lemmy.ml/u/torvalds", "category": "forum", "source": "maigret", "confidence": "LOW", "evidence": ["same username"], "kind": "username"}], "unconfirmed": []}`;
+// Real output of helix-osint 4.3.0 installed from PyPI (`--json --no-browser --wmn --sherlock --maigret -u torvalds`,
+// 16 Nov 2026), shortened to 3 of its 123 accounts. The counts are the run's own.
+const HELIX_OUT = String.raw`{"schema": "helix.cli.v1", "tool": {"name": "Helix", "version": "4.3.0"}, "username": "torvalds", "email": "", "purpose": "not stated", "summary": {"attempted": 7653, "answered": 6700, "found": 123, "unanswered": 953, "unanswered_by_reason": {"bot-check page": 417, "timeout": 275, "blocked or failed (HTTP 403)": 154, "connection error": 21, "blocked or failed (HTTP 429)": 14, "verifier: false-positive pattern": 10, "control probe: impossible username got no clear answer": 9, "blocked or failed (HTTP 401)": 8, "invalid HTTPS certificate": 8, "blocked or failed (HTTP 502)": 7, "blocked or failed (HTTP 503)": 5, "control probe: site finds impossible usernames": 5, "control probe: hit did not reproduce": 4, "proxy refused the host (HTTP 502 from the proxy)": 4, "blocked or failed (HTTP 500)": 4, "other error": 2, "needs curl_cffi (not installed)": 1, "blocked or failed (HTTP 999)": 1, "blocked or failed (HTTP 504)": 1, "blocked or failed (HTTP 521)": 1, "blocked or failed (HTTP 451)": 1, "blocked or failed (HTTP 520)": 1}, "left_out": 645}, "accounts": [{"platform": "Gitea", "url": "https://gitea.com/torvalds", "category": "dev", "source": "wmn", "confidence": "LOW", "evidence": ["same username"], "kind": "username"}, {"platform": "Keybase", "url": "https://keybase.io/torvalds", "category": "other", "source": "builtin", "confidence": "LOW", "evidence": ["same username"], "kind": "username"}, {"platform": "lemmy.ml", "url": "https://lemmy.ml/u/torvalds", "category": "forum", "source": "maigret", "confidence": "LOW", "evidence": ["same username"], "kind": "username"}], "unconfirmed": []}`;
 
 describe('tool catalog', () => {
   it('has the marketplace tools with pip packages', () => {
@@ -323,9 +323,9 @@ describe('helix', () => {
 
   it('runs unattended with JSON on stdout and the username last', () => {
     expect(buildToolArgs(spec, 'torvalds')).toEqual(['--json', '--no-browser', '--wmn', '--sherlock', '--maigret', '-u', 'torvalds']);
-    expect(spec.pip).toEqual({ package: 'helix-osint', bin: 'helix-osint', version: '4.2.0' });
+    expect(spec.pip).toEqual({ package: 'helix-osint', bin: 'helix-osint', version: '4.3.0' });
     // Pinned: the installer asks pip for this exact release, and the others stay unpinned.
-    expect(pipRequirement(spec)).toBe('helix-osint==4.2.0');
+    expect(pipRequirement(spec)).toBe('helix-osint==4.3.0');
     expect(pipRequirement(getToolSpec('sherlock')!)).toBe('sherlock-project');
   });
 

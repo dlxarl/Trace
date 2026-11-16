@@ -19,7 +19,7 @@ If neither exists, installing a tool (or **Install Python** in the Tools header)
 | :--- | :--- | :--- | :--- |
 | [Sherlock](https://github.com/sherlock-project/sherlock) | username | Accounts with that username on 400+ sites | `sherlock-project` |
 | [Maigret](https://github.com/soxoj/maigret) | username | Accounts on the top 500 sites, with profile details (name, location, IDs…) where exposed | `maigret` |
-| [Helix](https://github.com/thalha-a9/helix) | username | Accounts on about 7,700 sites (the Sherlock, WhatsMyName and Maigret lists; Helix's own full scan adds about 3,700 fediverse servers for about 12,000, left out here to keep runs short), each re-checked live against made-up usernames. Helix's HIGH / MEDIUM / LOW grade for how strongly an account is tied to the others is kept as an attribute | `helix-osint==4.2.0` |
+| [Helix](https://github.com/thalha-a9/helix) | username | Accounts on about 7,700 sites (the Sherlock, WhatsMyName and Maigret lists; Helix's own full scan adds about 3,700 fediverse servers for about 12,000, left out here to keep runs short), each re-checked live against made-up usernames. Helix's HIGH / MEDIUM / LOW grade for how strongly an account is tied to the others is kept as an attribute | `helix-osint==4.3.0` |
 | [Holehe](https://github.com/megadose/holehe) | email | Services where the email is registered (password-recovery probes disabled, so the target is not notified) | `holehe` |
 | [Ignorant](https://github.com/megadose/ignorant) | phone (`+1 2025550123`) | Services where the phone number is registered | `ignorant` |
 | [DNSRecon](https://github.com/darkoperator/dnsrecon) | domain | A / AAAA / NS / MX / CNAME records → host and IP entities; TXT and SOA kept as references | `dnsrecon` |
