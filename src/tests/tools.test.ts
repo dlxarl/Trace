@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { TOOL_CATALOG, buildToolArgs, getToolSpec, normaliseToolInput } from '../services/tools/catalog';
+import { TOOL_CATALOG, buildToolArgs, getToolSpec, normaliseToolInput, pipRequirement } from '../services/tools/catalog';
 import { parseHoleheHits, parseSiteUrlHits, toolOutputToBatch } from '../services/tools/parsers';
 import { planImport, buildImportRecords } from '../services/import/plan';
 import { ToolManager } from '../../electron/tools';
@@ -323,7 +323,10 @@ describe('helix', () => {
 
   it('runs unattended with JSON on stdout and the username last', () => {
     expect(buildToolArgs(spec, 'torvalds')).toEqual(['--json', '--no-browser', '--wmn', '--sherlock', '--maigret', '-u', 'torvalds']);
-    expect(spec.pip).toEqual({ package: 'helix-osint', bin: 'helix-osint' });
+    expect(spec.pip).toEqual({ package: 'helix-osint', bin: 'helix-osint', version: '4.2.0' });
+    // Pinned: the installer asks pip for this exact release, and the others stay unpinned.
+    expect(pipRequirement(spec)).toBe('helix-osint==4.2.0');
+    expect(pipRequirement(getToolSpec('sherlock')!)).toBe('sherlock-project');
   });
 
   it('turns the real JSON result into candidate accounts and keeps the unanswered count visible', () => {

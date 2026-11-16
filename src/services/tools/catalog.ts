@@ -23,8 +23,8 @@ export interface ToolSpec {
   category: ToolCategory;
   homepage: string;
   license: string;
-  /** PyPI package and console script it installs. */
-  pip: { package: string; bin: string };
+  /** PyPI package and console script it installs, and the exact version when it is pinned. */
+  pip: { package: string; bin: string; version?: string };
   input: {
     kind: ToolInputKind;
     label: string;
@@ -79,7 +79,7 @@ export const TOOL_CATALOG: ToolSpec[] = [
     category: 'Username',
     homepage: 'https://github.com/thalha-a9/helix',
     license: 'MIT',
-    pip: { package: 'helix-osint', bin: 'helix-osint' },
+    pip: { package: 'helix-osint', bin: 'helix-osint', version: '4.2.0' },
     input: { kind: 'username', label: 'Username', placeholder: 'e.g. johndoe', entityTypes: ['account', 'person'] },
     durationHint: '3-6 min',
     timeoutSec: 900,
@@ -177,6 +177,11 @@ export function normaliseToolInput(kind: ToolInputKind, raw: string): { ok: true
 }
 
 /** Exact argv (after the executable) for a validated input. */
+/** What pip installs: `package==version` when the version is pinned, else the package. */
+export function pipRequirement(spec: ToolSpec): string {
+  return spec.pip.version ? `${spec.pip.package}==${spec.pip.version}` : spec.pip.package;
+}
+
 export function buildToolArgs(spec: ToolSpec, value: string): string[] {
   switch (spec.id) {
     case 'sherlock':
